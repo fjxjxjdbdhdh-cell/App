@@ -1336,3 +1336,1274 @@ tbody td { padding: 12px 16px; color: var(--text-2); vertical-align: middle; }
   margin-bottom: 24px;
 }
 .dash-title { font-size: 24
+px; font-weight: 900; }
+.dash-subtitle { font-size: 13px; color: var(--text-3); }
+.dash-actions { display: flex; gap: 10px; }
+
+/* PORTFOLIO CHART */
+.portfolio-chart {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+}
+.chart-svg { width: 100%; height: 100%; }
+.chart-line-path {
+  fill: none;
+  stroke: url(#lineGrad);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(108,99,255,.8));
+}
+.chart-fill-path {
+  fill: url(#fillGrad);
+  opacity: .3;
+}
+.chart-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(8,8,20,.8) 100%);
+  pointer-events: none;
+}
+
+/* AI STATUS */
+.ai-status-card {
+  background: linear-gradient(135deg, rgba(108,99,255,.1), rgba(180,79,255,.05));
+  border: 1px solid rgba(108,99,255,.3);
+  border-radius: var(--r);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+  animation: borderGlow 4s ease-in-out infinite;
+}
+.ai-brain {
+  font-size: 48px;
+  animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px var(--primary));
+}
+.ai-info { flex: 1; }
+.ai-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.ai-subtitle { font-size: 13px; color: var(--text-2); }
+.ai-iq {
+  text-align: center;
+  padding: 12px 20px;
+  background: rgba(108,99,255,.1);
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(108,99,255,.2);
+}
+.ai-iq-value {
+  font-size: 32px;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: glowText 3s ease-in-out infinite;
+}
+.ai-iq-label { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.ai-waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+}
+.wave-bar {
+  width: 3px;
+  background: linear-gradient(to top, var(--primary), var(--accent));
+  border-radius: 3px;
+  animation: waveform .8s ease-in-out infinite;
+}
+.wave-bar:nth-child(1) { animation-delay: 0s; }
+.wave-bar:nth-child(2) { animation-delay: .1s; }
+.wave-bar:nth-child(3) { animation-delay: .2s; }
+.wave-bar:nth-child(4) { animation-delay: .3s; }
+.wave-bar:nth-child(5) { animation-delay: .15s; }
+.wave-bar:nth-child(6) { animation-delay: .05s; }
+.wave-bar:nth-child(7) { animation-delay: .25s; }
+.wave-bar:nth-child(8) { animation-delay: .35s; }
+
+/* SIGNALS TABLE */
+.signal-row-live { animation: fadeUp .4s ease; }
+.signal-pair { font-weight: 800; font-size: 14px; letter-spacing: .5px; }
+.signal-confidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conf-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 80px;
+}
+.conf-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  transition: width 1s ease;
+}
+.conf-fill-high { background: linear-gradient(90deg, var(--success), var(--success-dark)); }
+.conf-fill-med { background: linear-gradient(90deg, var(--warning), #FF9500); }
+.conf-val { font-size: 12px; font-weight: 700; }
+
+/* MINI CHART */
+.mini-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 32px;
+}
+.mini-bar {
+  width: 6px;
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  transition: var(--tr);
+}
+.mini-bar:hover { opacity: .8; transform: scaleY(1.1); }
+.mb-green { background: var(--success); }
+.mb-red { background: var(--danger); }
+
+/* TOGGLE SWITCH */
+.toggle-wrap { display: flex; align-items: center; gap: 10px; }
+.toggle-label { font-size: 13px; color: var(--text-2); }
+.toggle {
+  position: relative;
+  width: 46px; height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: var(--tr);
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 2px; top: 50%;
+  transform: translateY(-50%);
+  background: var(--text-3);
+  border-radius: 50%;
+  transition: var(--tr);
+}
+.toggle input:checked + .toggle-slider {
+  background: rgba(108,99,255,.2);
+  border-color: var(--primary);
+}
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(22px) translateY(-50%);
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+}
+
+/* RANGE SLIDER */
+.range-wrap { position: relative; padding: 4px 0; }
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  outline: none;
+  border: 1px solid var(--border);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(108,99,255,.5);
+  transition: var(--tr);
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 16px rgba(108,99,255,.8);
+  transform: scale(1.2);
+}
+
+/* SELECT */
+.form-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+  transition: var(--tr);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23606080' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+.form-select:focus { border-color: var(--primary); }
+
+/* PROGRESS */
+.progress-bar {
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  transition: width 1.5s cubic-bezier(.4,0,.2,1);
+  position: relative;
+  overflow: hidden;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; right: -100%; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
+  animation: shimmer 2s linear infinite;
+}
+
+/* TOAST NOTIFICATIONS */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast {
+  min-width: 300px;
+  max-width: 380px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.5);
+  animation: toastIn .4s cubic-bezier(.4,0,.2,1);
+  pointer-events: all;
+}
+.toast-icon { font-size: 20px; flex-shrink: 0; }
+.toast-content { flex: 1; }
+.toast-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.toast-msg { font-size: 12px; color: var(--text-2); }
+.toast-close { cursor: pointer; color: var(--text-3); font-size: 14px; padding: 2px; transition: var(--tr); }
+.toast-close:hover { color: var(--text); }
+.toast-success { border-color: rgba(0,255,179,.3); }
+.toast-success .toast-icon { filter: drop-shadow(0 0 6px var(--success)); }
+.toast-error { border-color: rgba(255,71,87,.3); }
+.toast-warning { border-color: rgba(255,184,48,.3); }
+.toast-info { border-color: rgba(108,99,255,.3); }
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5,5,15,.8);
+  backdrop-filter: blur(10px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r-xl);
+  padding: 32px;
+  width: 500px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: fadeUp .4s ease;
+  box-shadow: var(--glow-p), 0 40px 80px rgba(0,0,0,.6);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.modal-title { font-size: 20px; font-weight: 800; }
+.modal-close {
+  width: 32px; height: 32px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--tr);
+}
+.modal-close:hover { background: rgba(255,71,87,.1); border-color: var(--danger); color: var(--danger); }
+
+/* TICKER TAPE */
+.ticker-tape {
+  background: var(--bg-card2);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 64px;
+  z-index: 98;
+}
+.ticker-content {
+  display: flex;
+  gap: 40px;
+  white-space: nowrap;
+  animation: tickerScroll 40s linear infinite;
+  padding: 0 20px;
+}
+@keyframes tickerScroll {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+.ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+.ticker-symbol { color: var(--text); }
+.ticker-price { color: var(--text-2); }
+.ticker-change-pos { color: var(--success); }
+.ticker-change-neg { color: var(--danger); }
+
+/* CHART AREA (Trading) */
+.trading-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.chart-area {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-card2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.chart-symbol-select {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  transition: var(--tr);
+}
+.chart-symbol-select:hover { background: var(--bg-hover); }
+.chart-price-live {
+  font-size: 22px;
+  font-weight: 900;
+  font-family: var(--mono);
+  color: var(--success);
+}
+.chart-change {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.tf-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--tr);
+  font-family: var(--mono);
+}
+.tf-btn:hover { color: var(--text); background: var(--bg-hover); }
+.tf-btn.active { color: var(--primary); border-color: rgba(108,99,255,.3); background: rgba(108,99,255,.1); }
+.sep { width: 1px; height: 24px; background: var(--border); }
+.chart-display {
+  position: relative;
+  height: 400px;
+  background: var(--bg-card2);
+  overflow: hidden;
+}
+.candlestick-svg { width: 100%; height: 100%; }
+.chart-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+.spin-ring {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* ORDER PANEL */
+.order-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.order-tabs {
+  display: flex;
+  background: var(--bg-card2);
+  border-bottom: 1px solid var(--border);
+}
+.order-tab {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--tr);
+  font-family: var(--font);
+  text-align: center;
+}
+.order-tab.buy { color: var(--success); }
+.order-tab.sell { color: var(--danger); }
+.order-tab.buy.active { background: rgba(0,255,179,.08); border-bottom: 2px solid var(--success); }
+.order-tab.sell.active { background: rgba(255,71,87,.08); border-bottom: 2px solid var(--danger); }
+.order-tab:not(.active) { color: var(--text-3); }
+.order-body { padding: 20px; }
+.order-type-btns { display: flex; gap: 6px; margin-bottom: 16px; }
+.otype-btn {
+  flex: 1;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--tr);
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.otype-btn.active { background: rgba(108,99,255,.1); border-color: var(--primary); color: var(--primary); }
+.order-amount-wrap {
+  position: relative;
+  margin-bottom: 14px;
+}
+.order-amount-input {
+  width: 100%;
+  padding: 12px 50px 12px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  outline: none;
+  font-family: var(--mono);
+  transition: var(--tr);
+}
+.order-amount-input:focus { border-color: var(--primary); }
+.order-currency {
+  position: absolute;
+  right: 14px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.order-pct-btns { display: flex; gap: 6px; margin-bottom: 14px; }
+.pct-btn {
+  flex: 1;
+  padding: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--tr);
+  font-family: var(--font);
+}
+.pct-btn:hover { border-color: var(--primary); color: var(--primary); }
+.order-summary {
+  background: var(--bg-input);
+  border-radius: var(--r-sm);
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.order-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  color: var(--text-2);
+}
+.order-summary-row strong { color: var(--text); font-weight: 700; }
+.btn-buy-full {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: var(--font);
+  letter-spacing: .3px;
+  transition: var(--tr);
+}
+.buy-btn { background: linear-gradient(135deg, var(--success), var(--success-dark)); color: #000; }
+.buy-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,255,179,.4); }
+.sell-btn { background: linear-gradient(135deg, var(--danger), #CC0022); color: #fff; }
+.sell-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,71,87,.4); }
+
+/* ORDERBOOK */
+.orderbook {
+  background: var(--bg-card2);
+  border-top: 1px solid var(--border);
+  padding: 12px;
+}
+.orderbook-title { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.ob-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--mono);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+.ob-row-bg {
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  opacity: .07;
+}
+.ob-ask .ob-row-bg { background: var(--danger); }
+.ob-bid .ob-row-bg { background: var(--success); }
+.ob-ask .ob-price { color: var(--danger); font-weight: 700; }
+.ob-bid .ob-price { color: var(--success); font-weight: 700; }
+.ob-size { color: var(--text-2); }
+.ob-total { color: var(--text-3); }
+.ob-spread {
+  text-align: center;
+  padding: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 4px 0;
+  font-family: var(--mono);
+}
+
+/* POSITIONS TABLE */
+.positions-live-row { animation: fadeIn .5s ease; }
+
+/* ============================================================
+   AUTO TRADING PAGE
+   ============================================================ */
+.bots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+.bot-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  transition: var(--tr);
+  position: relative;
+  overflow: hidden;
+}
+.bot-card:hover { border-color: var(--border-bright); transform: translateY(-4px); box-shadow: 0 16px 50px rgba(0,0,0,.4); }
+.bot-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.bot-icon {
+  width: 52px; height: 52px;
+  border-radius: var(--r);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+.bi-1 { background: linear-gradient(135deg, rgba(108,99,255,.3), rgba(180,79,255,.2)); }
+.bi-2 { background: linear-gradient(135deg, rgba(0,212,255,.3), rgba(0,100,200,.2)); }
+.bi-3 { background: linear-gradient(135deg, rgba(0,255,179,.3), rgba(0,150,100,.2)); }
+.bi-4 { background: linear-gradient(135deg, rgba(255,215,0,.3), rgba(255,100,0,.2)); }
+.bi-5 { background: linear-gradient(135deg, rgba(255,71,87,.3), rgba(200,0,50,.2)); }
+.bi-6 { background: linear-gradient(135deg, rgba(255,184,48,.3), rgba(200,100,0,.2)); }
+.bot-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.bs-running { background: rgba(0,255,179,.1); color: var(--success); border: 1px solid rgba(0,255,179,.2); }
+.bs-running .bs-dot { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 1.5s ease infinite; }
+.bs-stopped { background: rgba(255,71,87,.1); color: var(--danger); border: 1px solid rgba(255,71,87,.2); }
+.bs-stopped .bs-dot { background: var(--danger); }
+.bs-paused { background: rgba(255,184,48,.1); color: var(--warning); border: 1px solid rgba(255,184,48,.2); }
+.bs-paused .bs-dot { background: var(--warning); animation: blink 1s ease infinite; }
+.bs-dot { width: 6px; height: 6px; border-radius: 50%; }
+.bot-name { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+.bot-strategy { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.bot-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+  background: var(--bg-input);
+  border-radius: var(--r-sm);
+  padding: 12px;
+}
+.bot-stat { text-align: center; }
+.bot-stat-v { font-size: 15px; font-weight: 800; }
+.bot-stat-l { font-size: 10px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+.bot-progress { margin-bottom: 16px; }
+.bot-progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.bot-actions { display: flex; gap: 8px; }
+.bot-card-glow {
+  position: absolute;
+  inset: -100%;
+  background: radial-gradient(circle at center, rgba(108,99,255,.05), transparent 60%);
+  pointer-events: none;
+}
+
+/* SETTINGS */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  transition: var(--tr);
+  border: 1px solid transparent;
+}
+.settings-nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.settings-nav-item.active {
+  background: rgba(108,99,255,.1);
+  color: var(--primary-light);
+  border-color: rgba(108,99,255,.2);
+}
+.settings-nav-icon { font-size: 17px; }
+.settings-panel { display: none; animation: fadeUp .4s ease; }
+.settings-panel.active { display: block; }
+.settings-section { margin-bottom: 32px; }
+.settings-section-title { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+.settings-section-desc { font-size: 13px; color: var(--text-3); margin-bottom: 20px; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-info { flex: 1; }
+.setting-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.setting-desc { font-size: 12px; color: var(--text-3); }
+.setting-ctrl { margin-left: 20px; }
+
+/* HISTORY PAGE */
+.history-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: var(--tr);
+  font-family: var(--font);
+}
+.filter-search:focus { border-color: var(--primary); }
+.filter-search::placeholder { color: var(--text-3); }
+
+/* ANALYTICS PAGE */
+.analytics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.donut-chart {
+  width: 120px; height: 120px;
+  flex-shrink: 0;
+  position: relative;
+}
+.donut-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.donut-val { font-size: 22px; font-weight: 900; }
+.donut-lbl { font-size: 10px; color: var(--text-3); font-weight: 600; text-transform: uppercase; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* SUBSCRIPTIONS */
+.subscription-current {
+  background: linear-gradient(135deg, rgba(108,99,255,.1), rgba(180,79,255,.05));
+  border: 1px solid rgba(108,99,255,.3);
+  border-radius: var(--r-lg);
+  padding: 28px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.sub-info { display: flex; align-items: center; gap: 16px; }
+.sub-icon { font-size: 44px; filter: drop-shadow(0 0 10px rgba(108,99,255,.5)); }
+.sub-name { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
+.sub-exp { font-size: 13px; color: var(--text-2); }
+.sub-stats { display: flex; gap: 28px; }
+.sub-stat { text-align: center; }
+.sub-stat-v { font-size: 20px; font-weight: 800; }
+.sub-stat-l { font-size: 11px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+
+/* NOTIFICATIONS PANEL */
+.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  transition: var(--tr);
+  cursor: pointer;
+}
+.notif-item:hover { border-color: var(--border-bright); }
+.notif-item.unread { border-left-color: var(--primary); }
+.notif-item.n-success { border-left-color: var(--success); }
+.notif-item.n-warning { border-left-color: var(--warning); }
+.notif-item.n-danger { border-left-color: var(--danger); }
+.notif-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.notif-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.notif-text { font-size: 12px; color: var(--text-2); }
+.notif-time { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+/* MISC UTILITIES */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-4 { gap: 4px; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.mb-24 { margin-bottom: 24px; }
+.mt-auto { margin-top: auto; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.opacity-0 { opacity: 0; }
+.w-full { width: 100%; }
+.font-mono { font-family: var(--mono); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.text-primary { color: var(--primary); }
+.text-secondary-c { color: var(--secondary); }
+.text-muted { color: var(--text-3); }
+.text-xs { font-size: 11px; }
+.text-sm { font-size: 13px; }
+.text-lg { font-size: 18px; }
+.fw-bold { font-weight: 700; }
+.fw-black { font-weight: 900; }
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+.tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(108,99,255,.1);
+  color: var(--primary-light);
+  border: 1px solid rgba(108,99,255,.15);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1100px) {
+  .trading-layout { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 420px; }
+}
+@media (max-width: 900px) {
+  .landing-nav { padding: 16px 24px; }
+  .section { padding: 60px 24px; }
+  .preview-section { margin: 0 24px 60px; }
+  .testimonials { padding: 60px 24px; }
+  .testimonials-grid { grid-template-columns: 1fr; }
+  .landing-footer { padding: 40px 24px 24px; }
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+  .preview-dashboard { grid-template-columns: repeat(2, 1fr); }
+  .preview-charts { grid-template-columns: 1fr; }
+  .analytics-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { transform: translateX(-260px); width: 260px; }
+  .sidebar.open { transform: translateX(0); box-shadow: 0 0 50px rgba(0,0,0,.8); }
+  .topbar { left: 0; }
+  .main-content { margin-left: 0; }
+  .features-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; }
+  .hero-stats { gap: 30px; }
+  .landing-nav-links { display: none; }
+  .grid-2,.grid-3,.grid-4,.grid-1-2,.grid-2-1 { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2,1fr); }
+  .hero-cta { flex-direction: column; align-items: center; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     LANDING PAGE
+     ============================================================ -->
+<div id="landingPage">
+  <!-- ANIMATED BACKGROUND -->
+  <div class="landing-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-bg"></div>
+    <div class="scanline"></div>
+  </div>
+
+  <!-- NAVIGATION -->
+  <nav class="landing-nav">
+    <a class="landing-logo" href="#">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="landing-logo .logo-name">
+          <span class="logo-gm">GM</span><span class="logo-ai">AI</span>
+        </div>
+        <span class="logo-trading">Trading Platform</span>
+      </div>
+    </a>
+    <div class="landing-nav-links">
+      <button class="nav-link-item" onclick="scrollToSection('features')">Возможности</button>
+      <button class="nav-link-item" onclick="scrollToSection('preview')">Предпросмотр</button>
+      <button class="nav-link-item" onclick="scrollToSection('pricing')">Цены</button>
+      <button class="nav-link-item" onclick="scrollToSection('testimonials')">Отзывы</button>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-nav-login" onclick="openAuth('login')">Войти</button>
+      <button class="btn-nav-start" onclick="openAuth('register')">Начать Бесплатно →</button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      🏆 &nbsp;#1 Торговая Платформа 2026–2029 · Рейтинг ИИ: 500+ IQ
+    </div>
+    <h1 class="hero-title">
+      <span class="line1">Торгуйте Как</span>
+      <span class="line2">Искусственный Интеллект</span>
+      <span class="line3">Автоматическая прибыль · Нейросеть · 24/7 мониторинг рынков</span>
+    </h1>
+    <p class="hero-sub">
+      Единственная платформа в мире, где ИИ с нейросетью <strong style="color:var(--primary)">500+ IQ</strong> управляет
+      вашим портфелем автоматически. Более <strong style="color:var(--secondary)">2.4 миллиона трейдеров</strong>
+      уже зарабатывают без усилий — 24 часа в сутки, 7 дней в неделю.
+    </p>
+    <div class="hero-cta">
+      <button class="btn-hero-primary" onclick="openAuth('register')">
+        🚀 &nbsp;Начать Торговать Бесплатно
+      </button>
+      <button class="btn-hero-secondary" onclick="scrollToSection('preview')">
+        👁 &nbsp;Посмотреть Демо
+      </button>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">$4.8B+</div>
+        <div class="hero-stat-label">Объём торгов</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">2.4M+</div>
+        <div class="hero-stat-label">Трейдеров</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">94.7%</div>
+        <div class="hero-stat-label">Точность ИИ</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">0.3ms</div>
+        <div class="hero-stat-label">Скорость ордера</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">380+</div>
+        <div class="hero-stat-label">Торговых пар</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section" id="features">
+    <div class="section-header">
+      <div class="section-tag">⚡ Возможности Платформы</div>
+      <h2 class="section-title">Технологии <span>Будущего</span> Уже Сегодня</h2>
+      <p class="section-desc">
+        Полный арсенал профессионального трейдера — от сигналов ИИ до
+        полностью автоматических торговых роботов с самообучающимися алгоритмами
+      </p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card" style="animation-delay:.05s">
+        <div class="feature-icon fi-purple">🧠</div>
+        <div class="feature-title">ИИ-Нейросеть 500+ IQ</div>
+        <div class="feature-desc">
+          Самообучающийся алгоритм анализирует более 10,000 рыночных переменных одновременно.
+          Точность прогнозов 94.7% — выше любого человека-трейдера на планете.
+          Модель обучена на 15 годах биржевых данных.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">Deep Learning</span>
+          <span class="ftag">500+ IQ</span>
+          <span class="ftag">Self-Learning</span>
+        </div>
+      </div>
+      <div class="feature-card" style="animation-delay:.1s">
+        <div class="feature-icon fi-blue">🤖</div>
+        <div class="feature-title">Авто-Торговые Боты</div>
+        <div class="feature-desc">
+          6 специализированных роботов: Скальпер, Swing-трейдер, Арбитражник, Grid-бот,
+          DCA-робот и Мартингейл. Каждый настраивается под вашу стратегию и риск-профиль.
+          Работают без вашего участия 24/7.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">6 Ботов</span>
+          <span class="ftag">24/7</span>
+          <span class="ftag">Auto-Profit</span>
+        </div>
+      </div>
+      <div class="feature-card" style="animation-delay:.15s">
+        <div class="feature-icon fi-green">📊</div>
+        <div class="feature-title">Аналитика Реального Времени</div>
+        <div class="feature-desc">
+          Профессиональные графики TradingView-уровня с 150+ индикаторами.
+          Тепловые карты рынков, корреляционный анализ, рыночные настроения,
+          потоки ордеров и стакан цен в реальном времени.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">150+ Индикаторов</span>
+          <span class="ftag">Real-Time</span>
+          <span class="ftag">Heatmaps</span>
+        </div>
+      </div>
+      <div class="feature-card" style="animation-delay:.2s">
+        <div class="feature-icon fi-pink">⚡</div>
+        <div class="feature-title">Ультра-Быстрое Исполнение</div>
+        <div class="feature-desc">
+          Исполнение ордеров за 0.3 миллисекунды через прямое подключение к 15
+          биржам мирового уровня. HFT-инфраструктура с co-location серверами
+          в 8 дата-центрах по всему миру.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">0.3ms</span>
+          <span class="ftag">15 Бирж</span>
+          <span class="ftag">HFT</span>
+        </div>
+      </div>
+      <div class="feature-card" style="animation-delay:.25s">
+        <div class="feature-icon fi-gold">🛡️</div>
+        <div class="feature-title">Риск-Менеджмент ИИ</div>
+        <div class="feature-desc">
+          Автоматическая система защиты капитала с динамическим Stop-Loss,
+          Take-Profit и трейлинг стопами. ИИ никогда не допускает слив депозита —
+          максимальная просадка ограничена вашими параметрами.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">Auto Stop-Loss</span>
+          <span class="ftag">Trailing</span>
+          <span class="ftag">Anti-Drain</span>
+        </div>
+      </div>
+      <div class="feature-card" style="animation-delay:.3s">
+        <div class="feature-icon fi-violet">🔔</div>
+        <div class="feature-title">Сигналы & Алерты</div>
+        <div class="feature-desc">
+          Мгновенные сигналы от ИИ с указанием точки входа, Stop-Loss и Take-Profit.
+          Уведомления в Telegram, SMS, Email и Push. Более 1,200 сигналов
+          отправляется пользователям ежедневно.
+        </div>
+        <div class="feature-tags">
+          <span class="ftag">1200+/сутки</span>
+          <span class="ftag">Telegram</span>
+          <span class="ftag">Instant</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD PREVIEW -->
+  <div class="preview-section" id="preview">
+    <div class="preview-header">
+      <div class="preview-dot pd-red"></div>
+      <div class="preview-dot pd-yellow"></div>
+      <div class="preview-dot pd-green"></div>
+      <span class="preview-title">GM AI Trading Platform — Live Dashboard Preview</span>
+    </div>
+    <div class="preview-body">
+      <div class="preview-dashboard">
+        <div class="prev-card">
+          <div class="prev-card-icon">💰</div>
+          <div class="prev-card-value prev-green">+$18,430</div>
+          <div class="prev-card-label">Прибыль сегодня</div>
+        </div>
+        <div class="prev-card">
+          <div class="prev-card-icon">🤖</div>
+          <div class="prev-card-value prev-blue">6/6</div>
+          <div class="prev-card-label">Ботов активно</div>
+        </div>
+        <div class="prev-card">
+          <div class="prev-card-icon">📈</div>
+          <div class="prev-card-value prev-purple">94.7%</div>
+          <div class="prev-card-label">Точность ИИ</div>
+        </div>
+        <div class="prev-card">
+          <div class="prev-card-icon">⭐</div>
+          <div class="prev-card-value prev-gold">500 IQ</div>
+          <div class="prev-card-label">Уровень ИИ</div>
+        </div>
+      </div>
+      <div class="preview-charts">
+        <div class="prev-chart">
+          <div class="prev-chart-title">📊 Баланс Портфеля — Последние 30 дней</div>
+          <div class="chart-bars">
+            <div class="chart-bar bar-up" style="height:40%"></div>
+            <div class="chart-bar bar-up" style="height:55%"></div>
+            <div class="chart-bar bar-down" style="height:48%"></div>
+            <div class="chart-bar bar-up" style="height:62%"></div>
+            <div class="chart-bar bar-up" style="height:70%"></div>
+            <div class="chart-bar bar-down" style="height:65%"></div>
+            <div class="chart-bar bar-up" style="height:78%"></div>
+            <div class="chart-bar bar-up" style="height:85%"></div>
+            <div class="chart-bar bar-up" style="height:90%"></div>
+            <div class="chart-bar bar-down" style="height:82%"></div>
+            <div class="chart-bar bar-up" style="height:88%"></div>
+            <div class="chart-bar bar-up" style="height:95%"></div>
+            <div class="chart-bar bar-up" style="height:100%"></div>
+            <div class="chart-bar bar-down" style="height:92%"></div>
+            <div class="chart-bar bar-up" style="height:98%"></div>
+          </div>
+        </div>
+        <div class="prev-chart">
+          <div class="prev-chart-title">🤖 Сигналы ИИ — Live</div>
+          <div class="prev-signals">
+            <div class="prev-signal sig-buy">
+              <span>BTC/USDT</span>
+              <span class="sig-label sig-label-buy">ПОКУПАТЬ</span>
+              <span class="sig-conf">97%</span>
+            </div>
+            <div class="prev-signal sig-sell">
+              <span>ETH/USDT</span>
+              <span class="sig-label sig-label-sell">ПРОДАВАТЬ</span>
+              <span class="sig-conf">89%</span>
+            </div>
+            <div class="prev-signal sig-buy">
+              <span>SOL/USDT</span>
+              <span class="sig-label sig-label-buy">ПОКУПАТЬ</span>
+              <span class="sig-conf">92%</span>
+            </div>
+            <div class="prev-signal sig-wait">
+              <span>XRP/USDT</span>
+              <span class="sig-label sig-label-wait">ЖДАТЬ</span>
+              <span class="sig-conf">71%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRICING -->
+  <section class="pricing-section" id="pricing">
+    <div class="section-header">
+      <div class="section-tag">💎 Подписки</div>
+      <h2 class="section-title">Выберите Свой <span>Уровень Прибыли</span></h2>
+      <p class="section-desc">
+        От бесплатного старта до полного профессионального арсенала.
+        Все планы включают ИИ-ядро нашей нейросети и базовый риск-менеджмент.
+      </p>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- FREE -->
+      <div class="pricing-card">
+        <div class="pricing-plan">🆓 Free</div>
+        <div class="pricing-price" style="color:var(--text-2)">$0</div>
+        <div class="pricing-period">навсегда бесплатно</div>
+        <div class="pricing-desc">
+          Идеальный старт для новичков. Изучайте рынок с реальными сигналами
+          ИИ без риска и вложений. Доступ к основным инструментам анализа.
+        </div>
+        <div class="pricing-iq">
+          <span class="iq-pulse"></span>
+          ИИ-уровень: 150 IQ
+        </div>
+        <ul class="pricing-features">
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text"><strong>3 сигнала</strong> от ИИ в день</span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text"><strong>1 торговый бот</strong> (ограничен)</span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text">Базовые графики <strong>20+ индикаторов</strong></span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text">Аналитика портфеля</span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text">Поддержка — Email (72ч)</span>
+          </li>
+          <li>
+            <span class="pf-cross">✗</span>
+            <span class="pf-text" style="color:var(--text-3)">Авто-торговля 24/7</span>
+          </li>
+          <li>
+            <span class="pf-cross">✗</span>
+            <span class="pf-text" style="color:var(--text-3)">HFT исполнение</span>
+          </li>
+          <li>
+            <span class="pf-cross">✗</span>
+            <span class="pf-text" style="color:var(--text-3)">Telegram алерты</span>
+          </li>
+        </ul>
+        <button class="btn-pricing btn-free" onclick="openAuth('register')">
+          Начать Бесплатно
+        </button>
+      </div>
+
+      <!-- VIP -->
+      <div class="pricing-card featured">
+        <div class="pricing-badge badge-popular">🔥 Самый Популярный</div>
+        <div class="pricing-plan" style="color:var(--primary-light)">⚡ VIP Pro</div>
+        <div class="pricing-price" style="background:linear-gradient(135deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">$79</div>
+        <div class="pricing-period">в месяц · отмена в любой момент</div>
+        <div class="pricing-desc">
+          Полный арсенал профессионального трейдера. ИИ работает за вас круглосуточно.
+          Неограниченные сигналы, 6 ботов и приоритетная поддержка.
+        </div>
+        <div class="pricing-iq" style="background:rgba(108,99,255,.15);border-color:rgba(108,99,255,.3)">
+          <span class="iq-pulse"></span>
+          ИИ-уровень: 500+ IQ
+        </div>
+        <ul class="pricing-features">
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text"><strong>Безлимитные сигналы</strong> ИИ 24/7</span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text"><strong>6 торговых ботов</strong> одновременно</span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text">Все <strong>150+ индикаторов</strong></span>
+          </li>
+          <li>
+            <span class="pf-check">✓</span>
+            <span class="pf-text"><strong>HFT</strong> исполнение 0.3ms</span>
+          </li>
+          <li>
+            <span class
