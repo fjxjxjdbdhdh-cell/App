@@ -4644,3 +4644,1064 @@ function renderSignalsTable(filter) {
       <td>
         <span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
           background
+-width="18"
+                  stroke-dasharray="45 238" stroke-dashoffset="-181"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#FFB800" stroke-width="18"
+                  stroke-dasharray="28 255" stroke-dashoffset="-226"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#FF4444" stroke-width="18"
+                  stroke-dasharray="17 266" stroke-dashoffset="-254"/>
+              </svg>
+              <div class="donut-center">
+                <div class="donut-total">$284K</div>
+                <div class="donut-label">Портфель</div>
+              </div>
+            </div>
+            <div class="donut-legend">
+              <div class="legend-item">
+                <div class="legend-dot" style="background:#6C63FF"></div>
+                <span>BTC</span>
+                <strong style="margin-left:auto;color:#6C63FF">40%</strong>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:#00FFB3"></div>
+                <span>ETH</span>
+                <strong style="margin-left:auto;color:#00FFB3">24%</strong>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:#00D4FF"></div>
+                <span>SOL</span>
+                <strong style="margin-left:auto;color:#00D4FF">16%</strong>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:#FFB800"></div>
+                <span>BNB</span>
+                <strong style="margin-left:auto;color:#FFB800">10%</strong>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:#FF4444"></div>
+                <span>Другие</span>
+                <strong style="margin-left:auto;color:#FF4444">10%</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MONTHLY PERFORMANCE -->
+        <div class="card">
+          <div class="card-title" style="margin-bottom:20px">📊 Доходность по Месяцам</div>
+          <div class="bar-chart-wrap" id="monthlyChart">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+
+        <!-- WIN/LOSS STATS -->
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px">🎯 Статистика Сделок</div>
+          <div class="stats-list">
+            <div class="stat-row">
+              <span class="stat-label">Всего сделок</span>
+              <span class="stat-val">1,317</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Прибыльных</span>
+              <span class="stat-val" style="color:var(--success)">1,247 (94.7%)</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Убыточных</span>
+              <span class="stat-val" style="color:var(--danger)">70 (5.3%)</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Средняя прибыль</span>
+              <span class="stat-val" style="color:var(--success)">+$338</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Средний убыток</span>
+              <span class="stat-val" style="color:var(--danger)">-$89</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Лучшая сделка</span>
+              <span class="stat-val" style="color:var(--success)">+$12,430</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Худшая сделка</span>
+              <span class="stat-val" style="color:var(--danger)">-$1,240</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Profit Factor</span>
+              <span class="stat-val" style="color:var(--primary)">17.8x</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Ср. время в сделке</span>
+              <span class="stat-val">2ч 34м</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI PERFORMANCE TABLE -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🧠 Производительность ИИ по Парам</div>
+            <div class="card-subtitle">Топ 10 торговых пар за 30 дней</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Пара</th>
+                <th>Сделок</th>
+                <th>Win Rate</th>
+                <th>Прибыль</th>
+                <th>ROI</th>
+                <th>Avg Time</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody id="analyticsTable">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /page-analytics -->
+
+
+    <!-- ==================== HISTORY PAGE ==================== -->
+    <div class="page" id="page-history">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">📋 История Сделок</div>
+          <div class="dash-subtitle">Полный журнал всех торговых операций</div>
+        </div>
+        <div class="dash-actions">
+          <input type="date" class="form-input" style="width:160px;padding:8px 12px">
+          <input type="date" class="form-input" style="width:160px;padding:8px 12px">
+          <button class="btn btn-ghost">🔍 Фильтр</button>
+          <button class="btn btn-primary">📥 Экспорт CSV</button>
+        </div>
+      </div>
+
+      <!-- HISTORY SUMMARY -->
+      <div class="metrics-grid" style="margin-bottom:20px">
+        <div class="metric-card">
+          <div class="metric-label">📊 Всего операций</div>
+          <div class="metric-value" style="color:var(--primary)">1,317</div>
+          <div class="metric-change change-pos">За всё время</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">💰 Общая прибыль</div>
+          <div class="metric-value" style="color:var(--success)">+$184,730</div>
+          <div class="metric-change change-pos">▲ +284% ROI</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">💸 Комиссии уплачено</div>
+          <div class="metric-value" style="color:var(--warning)">$1,247</div>
+          <div class="metric-change">0.67% от прибыли</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">🔄 Сделок сегодня</div>
+          <div class="metric-value" style="color:var(--secondary)">47</div>
+          <div class="metric-change change-pos">▲ +$3,240</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📋 Журнал Сделок</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="filterHistory('all')">Все</button>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="filterHistory('buy')">Покупки</button>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="filterHistory('sell')">Продажи</button>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="filterHistory('profit')">Прибыльные</button>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="filterHistory('loss')">Убыточные</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Дата/Время</th>
+                <th>Пара</th>
+                <th>Тип</th>
+                <th>Цена входа</th>
+                <th>Цена выхода</th>
+                <th>Объём</th>
+                <th>Комиссия</th>
+                <th>P&L</th>
+                <th>Источник</th>
+              </tr>
+            </thead>
+            <tbody id="historyTable">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+        <!-- PAGINATION -->
+        <div class="pagination" id="historyPagination">
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">3</button>
+          <button class="page-btn">...</button>
+          <button class="page-btn">28</button>
+        </div>
+      </div>
+    </div><!-- /page-history -->
+
+
+    <!-- ==================== PORTFOLIO PAGE ==================== -->
+    <div class="page" id="page-portfolio">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">💼 Портфель</div>
+          <div class="dash-subtitle">Управление активами и распределение капитала</div>
+        </div>
+        <div class="dash-actions">
+          <button class="btn btn-ghost">⚖️ Ребалансировать</button>
+          <button class="btn btn-primary" onclick="switchPage('trading')">+ Добавить Актив</button>
+        </div>
+      </div>
+
+      <!-- PORTFOLIO METRICS -->
+      <div class="metrics-grid" style="margin-bottom:20px">
+        <div class="metric-card">
+          <div class="metric-label">💰 Общая стоимость</div>
+          <div class="metric-value">$284,730</div>
+          <div class="metric-change change-pos">▲ +$18,430 сегодня</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">📈 P&L Всего</div>
+          <div class="metric-value" style="color:var(--success)">+$184,730</div>
+          <div class="metric-change change-pos">▲ +284% ROI</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">🪙 Активов в портфеле</div>
+          <div class="metric-value" style="color:var(--primary)">12</div>
+          <div class="metric-change change-pos">▲ Диверсифицирован</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">📉 Риск-Скор</div>
+          <div class="metric-value" style="color:var(--success)">Низкий</div>
+          <div class="metric-change change-pos">▲ ИИ оптимизировал</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🪙 Активы Портфеля</div>
+          <div class="card-subtitle">Реальное время · Авто-обновление каждые 10 сек</div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Актив</th>
+                <th>Количество</th>
+                <th>Ср. цена</th>
+                <th>Текущая цена</th>
+                <th>Стоимость</th>
+                <th>P&L</th>
+                <th>%</th>
+                <th>Доля</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="portfolioTable">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /page-portfolio -->
+
+
+    <!-- ==================== SUBSCRIPTION PAGE ==================== -->
+    <div class="page" id="page-subscription">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">💎 Подписка</div>
+          <div class="dash-subtitle">Управление тарифным планом и оплата</div>
+        </div>
+      </div>
+
+      <!-- CURRENT PLAN -->
+      <div class="card current-plan-card" style="margin-bottom:20px;border-color:var(--primary);background:linear-gradient(135deg,rgba(108,99,255,.08),rgba(180,79,255,.05))">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="font-size:48px">💎</div>
+            <div>
+              <div style="font-size:11px;color:var(--text-3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Текущий план</div>
+              <div style="font-size:24px;font-weight:900;background:var(--gradient-1);-webkit-background-clip:text;-webkit-text-fill-color:transparent">VIP Pro</div>
+              <div style="font-size:13px;color:var(--text-2);margin-top:4px">Активен до 15 января 2027 · Авто-продление включено</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:32px;font-weight:900;color:var(--primary)">$99</div>
+            <div style="font-size:13px;color:var(--text-3)">в месяц</div>
+            <button class="btn btn-primary" style="margin-top:10px" onclick="scrollTo(0,0)">
+              👑 Upgrade → Elite
+            </button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,.06)">
+          <div style="text-align:center;padding:12px;background:rgba(108,99,255,.1);border-radius:12px">
+            <div style="font-size:20px;font-weight:800;color:var(--primary)">50</div>
+            <div style="font-size:11px;color:var(--text-3)">Ботов доступно</div>
+          </div>
+          <div style="text-align:center;padding:12px;background:rgba(0,255,179,.08);border-radius:12px">
+            <div style="font-size:20px;font-weight:800;color:var(--success)">380+</div>
+            <div style="font-size:11px;color:var(--text-3)">Торговых пар</div>
+          </div>
+          <div style="text-align:center;padding:12px;background:rgba(0,212,255,.08);border-radius:12px">
+            <div style="font-size:20px;font-weight:800;color:var(--info)">94.7%</div>
+            <div style="font-size:11px;color:var(--text-3)">Точность ИИ</div>
+          </div>
+          <div style="text-align:center;padding:12px;background:rgba(255,184,0,.08);border-radius:12px">
+            <div style="font-size:20px;font-weight:800;color:var(--warning)">24/7</div>
+            <div style="font-size:11px;color:var(--text-3)">Live поддержка</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BILLING HISTORY -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🧾 История Платежей</div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Описание</th>
+                <th>Сумма</th>
+                <th>Статус</th>
+                <th>Квитанция</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>15 Дек 2026</td>
+                <td>VIP Pro · Декабрь 2026</td>
+                <td class="font-mono">$99.00</td>
+                <td><span class="badge-success">✓ Оплачено</span></td>
+                <td><a href="#" style="color:var(--primary-light);font-size:12px">Скачать PDF</a></td>
+              </tr>
+              <tr>
+                <td>15 Ноя 2026</td>
+                <td>VIP Pro · Ноябрь 2026</td>
+                <td class="font-mono">$99.00</td>
+                <td><span class="badge-success">✓ Оплачено</span></td>
+                <td><a href="#" style="color:var(--primary-light);font-size:12px">Скачать PDF</a></td>
+              </tr>
+              <tr>
+                <td>15 Окт 2026</td>
+                <td>VIP Pro · Октябрь 2026</td>
+                <td class="font-mono">$99.00</td>
+                <td><span class="badge-success">✓ Оплачено</span></td>
+                <td><a href="#" style="color:var(--primary-light);font-size:12px">Скачать PDF</a></td>
+              </tr>
+              <tr>
+                <td>15 Сен 2026</td>
+                <td>Upgrade: Starter → VIP Pro</td>
+                <td class="font-mono">$99.00</td>
+                <td><span class="badge-success">✓ Оплачено</span></td>
+                <td><a href="#" style="color:var(--primary-light);font-size:12px">Скачать PDF</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /page-subscription -->
+
+
+    <!-- ==================== NOTIFICATIONS PAGE ==================== -->
+    <div class="page" id="page-notifications">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">🔔 Уведомления</div>
+          <div class="dash-subtitle">Все алерты от ИИ и системы</div>
+        </div>
+        <div class="dash-actions">
+          <button class="btn btn-ghost" onclick="markAllRead()">✓ Прочитать все</button>
+          <button class="btn btn-ghost" onclick="clearNotifs()">🗑 Очистить</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="notifList">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div><!-- /page-notifications -->
+
+
+    <!-- ==================== SETTINGS PAGE ==================== -->
+    <div class="page" id="page-settings">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">⚙️ Настройки</div>
+          <div class="dash-subtitle">Персонализация платформы и управление аккаунтом</div>
+        </div>
+      </div>
+
+      <div class="settings-layout">
+        <!-- LEFT: PROFILE -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:20px">👤 Профиль</div>
+            <div style="text-align:center;margin-bottom:24px">
+              <div style="width:80px;height:80px;border-radius:50%;background:var(--gradient-1);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;margin:0 auto 12px;box-shadow:0 0 30px rgba(108,99,255,.4)">
+                АТ
+              </div>
+              <div style="font-size:18px;font-weight:800">Александр Тарасов</div>
+              <div style="font-size:13px;color:var(--text-3)">VIP Pro · Участник с Сен 2026</div>
+              <button class="btn btn-ghost" style="margin-top:10px;padding:6px 14px;font-size:12px">
+                📷 Изменить фото
+              </button>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Имя</label>
+              <input type="text" class="form-input" value="Александр">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Фамилия</label>
+              <input type="text" class="form-input" value="Тарасов">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" value="a.tarasov@example.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Телефон</label>
+              <input type="tel" class="form-input" value="+7 (999) 123-45-67">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telegram</label>
+              <input type="text" class="form-input" value="@alex_trader">
+            </div>
+            <button class="btn btn-primary w-full" style="width:100%;padding:12px">
+              💾 Сохранить Изменения
+            </button>
+          </div>
+
+          <!-- SECURITY -->
+          <div class="card">
+            <div class="card-title" style="margin-bottom:20px">🔐 Безопасность</div>
+            <div class="form-group">
+              <label class="form-label">Текущий пароль</label>
+              <input type="password" class="form-input" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Новый пароль</label>
+              <input type="password" class="form-input" placeholder="Минимум 8 символов">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Подтвердить пароль</label>
+              <input type="password" class="form-input" placeholder="Повторите пароль">
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:rgba(0,255,179,.05);border:1px solid rgba(0,255,179,.15);border-radius:12px;margin-bottom:16px">
+              <div>
+                <div style="font-size:14px;font-weight:700">🔒 2FA Аутентификация</div>
+                <div style="font-size:12px;color:var(--text-3)">Google Authenticator · Активна</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary w-full" style="width:100%;padding:12px">
+              🔐 Обновить Пароль
+            </button>
+          </div>
+        </div>
+
+        <!-- RIGHT: TRADING + NOTIFICATION SETTINGS -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:20px">🤖 Настройки Торговли</div>
+            <div class="form-group">
+              <label class="form-label">Базовая валюта</label>
+              <select class="form-input">
+                <option>USDT</option>
+                <option>BTC</option>
+                <option>ETH</option>
+                <option>BUSD</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Макс. риск на сделку (%)</label>
+              <input type="number" class="form-input" value="2" min="0.1" max="100">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Макс. открытых позиций</label>
+              <input type="number" class="form-input" value="10" min="1" max="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Плечо по умолчанию</label>
+              <select class="form-input">
+                <option>1x (Spot)</option>
+                <option>2x</option>
+                <option>3x</option>
+                <option selected>5x</option>
+                <option>10x</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Стратегия Stop-Loss (%)</label>
+              <input type="number" class="form-input" value="3" min="0.1" max="50">
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">🤖 Авто-торговля ботами</div>
+                <div style="font-size:12px;color:var(--text-3)">ИИ торгует автоматически</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">⚡ Авто-применение сигналов</div>
+                <div style="font-size:12px;color:var(--text-3)">Открывать позиции по сигналам ИИ</div>
+              </div>
+              <div class="toggle-switch" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">🛡 Авто риск-менеджмент</div>
+                <div style="font-size:12px;color:var(--text-3)">ИИ защищает от больших потерь</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary w-full" style="width:100%;padding:12px;margin-top:4px">
+              💾 Сохранить Настройки
+            </button>
+          </div>
+
+          <!-- NOTIFICATION SETTINGS -->
+          <div class="card">
+            <div class="card-title" style="margin-bottom:20px">🔔 Уведомления</div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">📧 Email уведомления</div>
+                <div style="font-size:12px;color:var(--text-3)">Сигналы и отчёты на почту</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">✈ Telegram уведомления</div>
+                <div style="font-size:12px;color:var(--text-3)">Алерты в Telegram бот</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">📱 Push-уведомления</div>
+                <div style="font-size:12px;color:var(--text-3)">В браузере и мобильном</div>
+              </div>
+              <div class="toggle-switch" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+            <div class="settings-toggle-row">
+              <div>
+                <div style="font-size:14px;font-weight:600">🔊 Звуковые алерты</div>
+                <div style="font-size:12px;color:var(--text-3)">Звук при новом сигнале</div>
+              </div>
+              <div class="toggle-switch active" onclick="this.classList.toggle('active')">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- API KEYS -->
+          <div class="card">
+            <div class="card-title" style="margin-bottom:16px">🔑 API Ключи Бирж</div>
+            <div class="api-key-row">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="font-size:24px">🟡</div>
+                <div>
+                  <div style="font-size:14px;font-weight:700">Binance</div>
+                  <div style="font-size:11px;color:var(--success)">✓ Подключена · Торговля активна</div>
+                </div>
+              </div>
+              <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px">Изменить</button>
+            </div>
+            <div class="api-key-row">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="font-size:24px">🔵</div>
+                <div>
+                  <div style="font-size:14px;font-weight:700">Bybit</div>
+                  <div style="font-size:11px;color:var(--success)">✓ Подключена · Торговля активна</div>
+                </div>
+              </div>
+              <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px">Изменить</button>
+            </div>
+            <div class="api-key-row">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="font-size:24px">⬛</div>
+                <div>
+                  <div style="font-size:14px;font-weight:700">OKX</div>
+                  <div style="font-size:11px;color:var(--text-3)">— Не подключена</div>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="padding:6px 12px;font-size:12px">+ Добавить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DANGER ZONE -->
+      <div class="card danger-zone" style="margin-top:16px;border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.04)">
+        <div class="card-title" style="color:var(--danger);margin-bottom:16px">⚠️ Зона Опасности</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-danger" onclick="confirmAction('Очистить историю торгов?')">
+            🗑 Очистить историю
+          </button>
+          <button class="btn btn-danger" onclick="confirmAction('Остановить все боты?')">
+            ⏹ Стоп все боты
+          </button>
+          <button class="btn btn-danger" onclick="confirmAction('Удалить аккаунт? Это действие необратимо!')">
+            💣 Удалить аккаунт
+          </button>
+        </div>
+      </div>
+    </div><!-- /page-settings -->
+
+  </main>
+</div><!-- /mainApp -->
+
+
+<!-- ============================================================
+     TOAST NOTIFICATION
+     ============================================================ -->
+<div class="toast-container" id="toastContainer"></div>
+
+
+<!-- ============================================================
+     CONFIRM MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="confirmModal" style="display:none">
+  <div class="modal" style="width:380px;text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+    <div class="modal-title" style="margin-bottom:8px" id="confirmText">Вы уверены?</div>
+    <div style="font-size:13px;color:var(--text-3);margin-bottom:24px">Это действие нельзя отменить</div>
+    <div style="display:flex;gap:12px">
+      <button class="btn btn-ghost" style="flex:1;padding:12px" onclick="closeConfirm()">Отмена</button>
+      <button class="btn btn-danger" style="flex:1;padding:12px" onclick="doConfirm()">Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+const state = {
+  loggedIn: false,
+  currentPage: 'dashboard',
+  orderSide: 'buy',
+  orderType: 'market',
+  currentSymbol: 'BTC/USDT',
+  btcPrice: 67432,
+  ethPrice: 3847,
+  solPrice: 189.40,
+  signalFilter: 'all',
+  botsRunning: true,
+  notifications: [],
+  trades: [],
+  positions: [],
+  signals: []
+};
+
+const prices = {
+  'BTC/USDT': { price: 67432, change: 2.34 },
+  'ETH/USDT': { price: 3847,  change: 1.87 },
+  'SOL/USDT': { price: 189.4, change: 4.21 },
+  'BNB/USDT': { price: 412.8, change: -0.93 },
+  'XRP/USDT': { price: 0.6234,change: 3.12 },
+  'ADA/USDT': { price: 0.4891,change: -1.44 },
+  'DOGE/USDT':{ price: 0.1823,change: 7.82 },
+  'AVAX/USDT':{ price: 38.91, change: -0.67 }
+};
+
+// ============================================================
+// AUTH
+// ============================================================
+function openAuth(mode) {
+  document.getElementById('authModal').style.display = 'flex';
+  switchAuth(mode);
+}
+
+function closeAuth() {
+  document.getElementById('authModal').style.display = 'none';
+}
+
+function switchAuth(mode) {
+  const isLogin = mode === 'login';
+  document.getElementById('loginForm').style.display    = isLogin ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = isLogin ? 'none'  : 'block';
+  document.getElementById('authTitle').textContent    = isLogin ? 'Войти в платформу' : 'Создать Аккаунт';
+  document.getElementById('authSubtitle').textContent = isLogin ? 'Добро пожаловать обратно, трейдер' : 'Начните торговать с ИИ уже сегодня';
+}
+
+function togglePass(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function doLogin() {
+  closeAuth();
+  document.getElementById('landingPage').style.display = 'none';
+  document.getElementById('mainApp').style.display     = 'block';
+  state.loggedIn = true;
+  initApp();
+  showToast('🚀 Добро пожаловать в GM AI Trading!', 'success');
+}
+
+function doLogout() {
+  document.getElementById('mainApp').style.display     = 'none';
+  document.getElementById('landingPage').style.display = 'block';
+  state.loggedIn = false;
+  showToast('👋 Вы вышли из системы', 'info');
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const pageTitles = {
+  dashboard:    ['Дашборд',       'Добро пожаловать, Александр · Обзор портфеля'],
+  trading:      ['Торговля',      'Торговый терминал · Реальное время'],
+  signals:      ['ИИ Сигналы',    'Нейросеть 500+ IQ · Обновление каждые 30 сек'],
+  bots:         ['Авто-Боты',     '6 активных роботов · Торгуют 24/7'],
+  analytics:    ['Аналитика',     'Глубокий анализ торговли · ИИ-инсайты'],
+  history:      ['История',       'Журнал всех торговых операций'],
+  portfolio:    ['Портфель',      'Управление активами · Реальное время'],
+  subscription: ['Подписка',      'VIP Pro · Активна'],
+  notifications:['Уведомления',   'Алерты от ИИ и системы'],
+  settings:     ['Настройки',     'Персонализация платформы']
+};
+
+function switchPage(page) {
+  // hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById('page-' + page).classList.add('active');
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
+
+  state.currentPage = page;
+  const [title, sub] = pageTitles[page] || [page, ''];
+  document.getElementById('topbarTitle').textContent = title;
+  document.getElementById('topbarSub').textContent   = sub;
+
+  // Close sidebar on mobile
+  if (window.innerWidth < 900) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+
+  // Page-specific init
+  if (page === 'bots')         renderBots();
+  if (page === 'history')      renderHistory();
+  if (page === 'portfolio')    renderPortfolio();
+  if (page === 'analytics')    renderMonthlyChart();
+  if (page === 'notifications') renderNotifications();
+  if (page === 'signals')      renderSignalsTable();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ============================================================
+// APP INIT
+// ============================================================
+function initApp() {
+  generateInitialData();
+  renderDashSignals();
+  renderOpenPositions();
+  renderRecentTrades();
+  renderOrderBook();
+  renderMyPositions();
+  initCandleChart();
+  startLivePrices();
+  startSignalStream();
+  startNotifStream();
+}
+
+// ============================================================
+// DATA GENERATION
+// ============================================================
+const pairs   = ['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','AVAX/USDT','LINK/USDT','DOT/USDT'];
+const bots_data = [
+  { name:'ScalpBot Pro',    pair:'BTC/USDT', strategy:'Scalping',    profit:'+$1,240', pct:'+8.4%',  trades:124, wr:'96%', status:true,  color:'var(--primary)' },
+  { name:'TrendRider AI',   pair:'ETH/USDT', strategy:'Trend',       profit:'+$890',   pct:'+6.1%',  trades:87,  wr:'93%', status:true,  color:'var(--success)' },
+  { name:'GridMaster',      pair:'SOL/USDT', strategy:'Grid',        profit:'+$430',   pct:'+3.8%',  trades:312, wr:'89%', status:true,  color:'var(--info)'    },
+  { name:'MomentumBot',     pair:'BNB/USDT', strategy:'Momentum',    profit:'+$320',   pct:'+2.9%',  trades:56,  wr:'91%', status:true,  color:'var(--warning)' },
+  { name:'DCA Accumulator', pair:'XRP/USDT', strategy:'DCA',         profit:'+$210',   pct:'+1.7%',  trades:28,  wr:'88%', status:true,  color:'var(--secondary)'},
+  { name:'ArbitrageAI',     pair:'Multiple', strategy:'Arbitrage',   profit:'+$150',   pct:'+1.2%',  trades:445, wr:'99%', status:true,  color:'var(--gold)'    }
+];
+
+function generateInitialData() {
+  // Positions
+  state.positions = [
+    { pair:'BTC/USDT',  side:'LONG',  size:'0.4200',  entry:65200,  current:67432, sl:63000,  tp:71000,  pnl:938,  pnlPct:3.43  },
+    { pair:'ETH/USDT',  side:'LONG',  size:'3.8000',  entry:3720,   current:3847,  sl:3500,   tp:4200,   pnl:482,  pnlPct:3.41  },
+    { pair:'SOL/USDT',  side:'LONG',  size:'24.0000', entry:178.4,  current:189.4, sl:168,    tp:210,    pnl:264,  pnlPct:6.17  },
+    { pair:'BNB/USDT',  side:'SHORT', size:'8.0000',  entry:425,    current:412.8, sl:440,    tp:390,    pnl:97,   pnlPct:2.87  },
+    { pair:'XRP/USDT',  side:'LONG',  size:'8400',    entry:0.598,  current:0.6234,sl:0.560,  tp:0.700,  pnl:213,  pnlPct:4.24  },
+    { pair:'DOGE/USDT', side:'LONG',  size:'12000',   entry:0.168,  current:0.1823,sl:0.155,  tp:0.220,  pnl:171,  pnlPct:8.51  },
+    { pair:'AVAX/USDT', side:'SHORT', size:'48.0000', entry:40.4,   current:38.91, sl:43,     tp:34,     pnl:71,   pnlPct:3.69  },
+    { pair:'LINK/USDT', side:'LONG',  size:'120.000', entry:17.24,  current:18.74, sl:16,     tp:22,     pnl:180,  pnlPct:8.70  }
+  ];
+
+  // Signals
+  state.signals = generateSignals(20);
+
+  // Notifications
+  state.notifications = [
+    { id:1, type:'success', icon:'✅', title:'Сигнал исполнен',          text:'BTC/USDT LONG · Вход: $67,200 · Цель: +4.8%',     time:'2 мин назад',  read:false },
+    { id:2, type:'success', icon:'💰', title:'Прибыль зафиксирована',    text:'ETH/USDT +$482 · Take-Profit достигнут',           time:'8 мин назад',  read:false },
+    { id:3, type:'info',    icon:'⚡', title:'Новый сигнал ИИ',          text:'SOL/USDT · Уверенность 97% · Покупать',            time:'15 мин назад', read:false },
+    { id:4, type:'warning', icon:'⚠️', title:'Риск-алерт',              text:'Открыто 8 позиций · Рекомендуем снизить риск',     time:'32 мин назад', read:false },
+    { id:5, type:'success', icon:'🤖', title:'Бот завершил цикл',        text:'ScalpBot Pro · +$340 за 47 сделок сегодня',        time:'1 час назад',  read:false },
+    { id:6, type:'info',    icon:'📊', title:'Еженедельный отчёт',       text:'Прибыль за неделю: +$12,430 · ROI: +4.6%',        time:'3 часа назад', read:true  },
+    { id:7, type:'success', icon:'🎯', title:'Цель месяца близко',       text:'74% до цели $57,000 · Осталось $14,820',          time:'5 часов назад',read:true  }
+  ];
+
+  // Trades for recent
+  state.trades = generateTrades(20);
+}
+
+function generateSignals(n) {
+  const sigs = [];
+  const tf = ['1м','5м','15м','1ч','4ч','1д'];
+  const strategies = ['Breakout','Reversal','Trend Follow','Scalp','Momentum','Grid'];
+  pairs.forEach((pair,i) => {
+    if (i >= n) return;
+    const isBuy   = Math.random() > 0.35;
+    const p       = prices[pair] || { price: 100, change: 1 };
+    const entry   = p.price * (1 + (Math.random()*.004 - .002));
+    const sl      = isBuy  ? entry * (1 - Math.random()*.04 - .01) : entry * (1 + Math.random()*.04 + .01);
+    const tp      = isBuy  ? entry * (1 + Math.random()*.08 + .02) : entry * (1 - Math.random()*.08 - .02);
+    const conf    = 75 + Math.floor(Math.random()*24);
+    sigs.push({
+      pair, isBuy, entry, sl, tp, conf,
+      tf:        tf[Math.floor(Math.random()*tf.length)],
+      strategy:  strategies[Math.floor(Math.random()*strategies.length)],
+      rr:        ((Math.abs(tp-entry)/Math.abs(entry-sl))).toFixed(1),
+      status:    conf > 90 ? 'Горячий' : conf > 80 ? 'Активный' : 'Ожидание'
+    });
+  });
+  return sigs;
+}
+
+function generateTrades(n) {
+  const trades = [];
+  const bnames = ['ScalpBot','TrendRider','GridMaster','MomentumBot','DCA Bot','ArbitrageAI','Ручная'];
+  for (let i = 0; i < n; i++) {
+    const pair  = pairs[Math.floor(Math.random()*pairs.length)];
+    const p     = prices[pair] || { price:100 };
+    const isBuy = Math.random() > .4;
+    const price = p.price * (1 + (Math.random()*.06 - .03));
+    const isWin = Math.random() > .07;
+    const pnl   = isWin ? +(Math.random()*800+20).toFixed(2) : -(Math.random()*200+10).toFixed(2);
+    const minsAgo = i * 13 + Math.floor(Math.random()*10);
+    const d = new Date(Date.now() - minsAgo*60000);
+    trades.push({
+      pair, isBuy, price, pnl,
+      bot:  bnames[Math.floor(Math.random()*bnames.length)],
+      time: d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})
+    });
+  }
+  return trades;
+}
+
+// ============================================================
+// RENDER DASHBOARD
+// ============================================================
+function renderDashSignals() {
+  const el = document.getElementById('dashSignals');
+  if (!el) return;
+  const top5 = state.signals.slice(0,5);
+  el.innerHTML = top5.map(s => `
+    <div class="signal-row" onclick="switchPage('signals')">
+      <div class="signal-pair">${s.pair}</div>
+      <div class="signal-type ${s.isBuy ? 'signal-buy':'signal-sell'}">
+        ${s.isBuy ? '▲ LONG':'▼ SHORT'}
+      </div>
+      <div class="signal-conf">
+        <div class="conf-bar">
+          <div class="conf-fill" style="width:${s.conf}%;background:${s.conf>90?'var(--success)':s.conf>80?'var(--warning)':'var(--primary)'}"></div>
+        </div>
+        <span class="conf-val">${s.conf}%</span>
+      </div>
+      <div class="signal-tf">${s.tf}</div>
+    </div>
+  `).join('');
+}
+
+function renderOpenPositions() {
+  const tbody = document.getElementById('openPositions');
+  if (!tbody) return;
+  tbody.innerHTML = state.positions.slice(0,6).map(p => `
+    <tr>
+      <td><strong>${p.pair}</strong></td>
+      <td><span class="badge-${p.side==='LONG'?'buy':'sell'}">${p.side}</span></td>
+      <td class="font-mono">$${(p.entry * parseFloat(p.size)).toLocaleString('en',{maximumFractionDigits:0})}</td>
+      <td class="font-mono ${p.pnl>=0?'text-success':'text-danger'}">
+        ${p.pnl>=0?'+':''}$${p.pnl.toLocaleString('en',{maximumFractionDigits:0})}
+      </td>
+      <td class="${p.pnlPct>=0?'text-success':'text-danger'}">${p.pnlPct>=0?'+':''}${p.pnlPct}%</td>
+    </tr>
+  `).join('');
+}
+
+function renderRecentTrades() {
+  const tbody = document.getElementById('recentTrades');
+  if (!tbody) return;
+  tbody.innerHTML = state.trades.slice(0,8).map(t => `
+    <tr>
+      <td><strong>${t.pair}</strong></td>
+      <td><span class="badge-${t.isBuy?'buy':'sell'}">${t.isBuy?'BUY':'SELL'}</span></td>
+      <td class="font-mono">$${t.price.toLocaleString('en',{maximumFractionDigits:2})}</td>
+      <td class="font-mono ${t.pnl>=0?'text-success':'text-danger'}">
+        ${t.pnl>=0?'+':''}$${Math.abs(t.pnl).toFixed(2)}
+      </td>
+      <td style="font-size:11px;color:var(--text-3)">${t.bot}</td>
+    </tr>
+  `).join('');
+}
+
+// ============================================================
+// TRADING PAGE
+// ============================================================
+function switchOrderTab(side) {
+  state.orderSide = side;
+  document.getElementById('tabBuy').classList.toggle('active', side==='buy');
+  document.getElementById('tabSell').classList.toggle('active', side==='sell');
+  document.getElementById('mainOrderBtn').className = `btn-buy-full ${side}-btn`;
+  document.getElementById('mainOrderBtn').innerHTML = side==='buy'
+    ? `🟢 КУПИТЬ ${state.currentSymbol.split('/')[0]}`
+    : `🔴 ПРОДАТЬ ${state.currentSymbol.split('/')[0]}`;
+}
+
+function setOrderType(btn, type) {
+  document.querySelectorAll('.otype-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.orderType = type;
+  document.getElementById('limitPriceWrap').style.display = type==='market' ? 'none':'block';
+}
+
+function updateChartSymbol() {
+  const sym = document.getElementById('chartSymbol').value;
+  state.currentSymbol = sym;
+  const p = prices[sym] || { price:100, change:1 };
+  document.getElementById('chartPriceLive').textContent = '$'+p.price.toLocaleString('en',{maximumFractionDigits:4});
+  const chEl = document.getElementById('chartChangeLive');
+  chEl.textContent = (p.change>=0?'+':'')+p.change+'%';
+  chEl.className   = 'chart-change '+(p.change>=0?'change-pos':'change-neg');
+  document.getElementById('orderCurrency').textContent = sym.split('/')[0];
+  switchOrderTab(state.orderSide);
+  initCandleChart();
+}
+
+function setTF(btn, tf) {
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  initCandleChart();
+}
+
+function setChartType(type) { initCandleChart(); }
+
+function setPct(pct) {
+  const balance = 48320;
+  const p = prices[state.currentSymbol] || { price:100 };
+  document.getElementById('orderQty').value = ((balance*(pct/100))/p.price).toFixed(5);
+  updateOrderSummary();
+}
+
+function updateOrderSummary() {
+  const qty = parseFloat(document.getElementById('orderQty').value)||0;
+  const p   = prices[state.currentSymbol] || { price:100 };
+  const total = qty * p.price;
+  const fee   = total * 0.001;
+  document.getElementById('sumPrice').textContent  = '$'+p.price.toLocaleString('en',{maximumFractionDigits:4});
+  document.getElementById('sumFee').textContent    = '$'+fee.toFixed(4);
+  document.getElementById('sumTotal').textContent  = '$'+total.toFixed(2);
+}
+
+function placeOrder() {
+  const qty = parseFloat(document.getElementById('orderQty').value)||0;
+  if (!qty) { showToast('⚠️ Введите количество','warning'); return; }
+  const side = state.orderSide;
+  const p    = prices[state.currentSymbol] || { price:100 };
+  showToast(`${side==='buy'?'🟢 Куплено':'🔴 Продано'}: ${qty} ${state.currentSymbol.split('/')[0]} по $${p.price.toLocaleString('en',{maximumFractionDigits:4})}`, 'success');
+  document.getElementById('orderQty').value = '';
+  updateOrderSummary();
+}
+
+function closeAllPositions() {
+  showToast('⏹ Все позиции закрыты · P&L: +$2,416', 'success');
+}
+
+function renderMyPositions() {
+  const tbody = document.getElementById('myPositions');
+  if (!tbody) return;
+  tbody.innerHTML = state.positions.map((p,i) => `
+    <tr>
+      <td><strong>${p.pair}</strong></td>
+      <td><span class="badge-${p.side==='LONG'?'buy':'sell'}">${p.side}</span></td>
+      <td class="font-mono">${p.size}</td>
+      <td class="font-mono">$${p.entry.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono">$${p.current.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono text-danger">$${p.sl.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono text-success">$${p.tp.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono ${p.pnl>=0?'text-success':'text-danger'} fw-bold">
+        ${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)} (${p.pnlPct>=0?'+':''}${p.pnlPct}%)
+      </td>
+      <td>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:11px"
+          onclick="closePosition(${i})">Закрыть</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function closePosition(i) {
+  const p = state.positions[i];
+  showToast(`✅ ${p.pair} закрыта · P&L: ${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)}`, 'success');
+  state.positions.splice(i,1);
+  renderMyPositions();
+  renderOpenPositions();
+}
+
+// ============================================================
+// ORDER BOOK
+// ============================================================
+function renderOrderBook() {
+  const p = prices[state.currentSymbol] || { price:100 };
+  let asksHTML = '', bidsHTML = '';
+  for (let i=5; i>=1; i--) {
+    const price = (p.price + i*4.2 + Math.random()*2).toFixed(2);
+    const size  = (Math.random()*3+0.1).toFixed(3);
+    const total = (price*size).toFixed(0);
+    asksHTML += `<div class="ob-row ob-ask">
+      <span class="ob-price ob-ask-price">${price}</span>
+      <span class="ob-size">${size}</span
