@@ -5705,3 +5705,625 @@ function renderOrderBook() {
     asksHTML += `<div class="ob-row ob-ask">
       <span class="ob-price ob-ask-price">${price}</span>
       <span class="ob-size">${size}</span
+>
+      <span class="ob-total">${Number(total).toLocaleString()}</span>
+    </div>`;
+  }
+  for (let i=1; i<=5; i++) {
+    const price = (p.price - i*4.2 - Math.random()*2).toFixed(2);
+    const size  = (Math.random()*3+0.1).toFixed(3);
+    const total = (price*size).toFixed(0);
+    bidsHTML += `<div class="ob-row ob-bid">
+      <span class="ob-price ob-bid-price">${price}</span>
+      <span class="ob-size">${size}</span>
+      <span class="ob-total">${Number(total).toLocaleString()}</span>
+    </div>`;
+  }
+  const asks = document.getElementById('obAsks');
+  const bids = document.getElementById('obBids');
+  const mid  = document.getElementById('obMidPrice');
+  if (asks) asks.innerHTML = asksHTML;
+  if (bids) bids.innerHTML = bidsHTML;
+  if (mid)  mid.textContent = '$' + p.price.toLocaleString('en',{maximumFractionDigits:2});
+}
+
+// ============================================================
+// CANDLE CHART (Canvas)
+// ============================================================
+function initCandleChart() {
+  const canvas = document.getElementById('candleChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  || 700;
+  canvas.height = canvas.offsetHeight || 340;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const p    = prices[state.currentSymbol] || { price:100 };
+  const base = p.price;
+  const candles = [];
+  let   close = base * 0.88;
+  for (let i=0; i<60; i++) {
+    const o    = close;
+    const move = (Math.random()-0.46)*base*0.018;
+    close = Math.max(base*0.80, Math.min(base*1.20, o+move));
+    const hi   = Math.max(o,close) + Math.random()*base*0.006;
+    const lo   = Math.min(o,close) - Math.random()*base*0.006;
+    candles.push({ o, c:close, h:hi, l:lo });
+  }
+
+  const prices_arr = candles.flatMap(c=>[c.h,c.l]);
+  const minP = Math.min(...prices_arr);
+  const maxP = Math.max(...prices_arr);
+  const pad  = { top:20, bottom:30, left:10, right:60 };
+  const cW   = (W - pad.left - pad.right) / candles.length;
+  const scaleY = v => pad.top + (1-(v-minP)/(maxP-minP))*(H-pad.top-pad.bottom);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth   = 1;
+  for (let i=0; i<=5; i++) {
+    const y = pad.top + i*(H-pad.top-pad.bottom)/5;
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(W-pad.right,y); ctx.stroke();
+    const val = maxP - i*(maxP-minP)/5;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px Inter';
+    ctx.textAlign = 'left';
+    ctx.fillText('$'+val.toFixed(val>100?0:4), W-pad.right+6, y+4);
+  }
+
+  // Area gradient under last price line
+  const gradLine = ctx.createLinearGradient(0,0,0,H);
+  gradLine.addColorStop(0,'rgba(108,99,255,0.25)');
+  gradLine.addColorStop(1,'rgba(108,99,255,0)');
+  ctx.beginPath();
+  candles.forEach((c,i) => {
+    const x = pad.left + i*cW + cW/2;
+    const y = scaleY(c.c);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad.left+(candles.length-1)*cW+cW/2, H-pad.bottom);
+  ctx.lineTo(pad.left+cW/2, H-pad.bottom);
+  ctx.closePath();
+  ctx.fillStyle = gradLine;
+  ctx.fill();
+
+  // Candles
+  candles.forEach((c,i) => {
+    const x   = pad.left + i*cW;
+    const isBull = c.c >= c.o;
+    const col    = isBull ? '#00FFB3' : '#FF4444';
+    const oY  = scaleY(c.o), cY = scaleY(c.c);
+    const hY  = scaleY(c.h), lY = scaleY(c.l);
+    const bH  = Math.max(1, Math.abs(cY-oY));
+    ctx.fillStyle   = col;
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1;
+    // wick
+    ctx.beginPath();
+    ctx.moveTo(x+cW/2, hY);
+    ctx.lineTo(x+cW/2, lY);
+    ctx.stroke();
+    // body
+    ctx.fillRect(x+1, Math.min(oY,cY), cW-2, bH);
+  });
+
+  // Price line
+  const lastY = scaleY(candles[candles.length-1].c);
+  ctx.setLineDash([5,4]);
+  ctx.strokeStyle = 'rgba(108,99,255,0.7)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, lastY);
+  ctx.lineTo(W-pad.right, lastY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ============================================================
+// SIGNALS PAGE
+// ============================================================
+function filterSignals(f) {
+  state.signalFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  renderSignalsTable();
+}
+
+function renderSignalsTable() {
+  const tbody = document.getElementById('signalsTable');
+  if (!tbody) return;
+  let sigs = state.signals;
+  if (state.signalFilter === 'long')  sigs = sigs.filter(s=>s.isBuy);
+  if (state.signalFilter === 'short') sigs = sigs.filter(s=>!s.isBuy);
+  if (state.signalFilter === 'hot')   sigs = sigs.filter(s=>s.conf>=90);
+
+  tbody.innerHTML = sigs.map(s => {
+    const p = prices[s.pair] || { price:100 };
+    const reached = s.isBuy ? p.price >= s.tp : p.price <= s.tp;
+    const badge   = reached ? 'badge-success' : (s.conf>=90?'badge-hot':'badge-active');
+    const label   = reached ? '✅ Цель' : s.status;
+    return `
+    <tr>
+      <td><strong>${s.pair}</strong><br><span style="font-size:11px;color:var(--text-3)">${s.strategy}</span></td>
+      <td><span class="badge-${s.isBuy?'buy':'sell'}">${s.isBuy?'▲ LONG':'▼ SHORT'}</span></td>
+      <td class="font-mono">$${s.entry.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono text-danger">$${s.sl.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono text-success">$${s.tp.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td style="font-weight:700;color:var(--info)">${s.rr}:1</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;min-width:60px">
+            <div style="height:100%;border-radius:4px;width:${s.conf}%;background:${s.conf>=90?'var(--success)':s.conf>=80?'var(--warning)':'var(--primary)'}"></div>
+          </div>
+          <span style="font-weight:700;color:${s.conf>=90?'var(--success)':s.conf>=80?'var(--warning)':'var(--primary)'}">${s.conf}%</span>
+        </div>
+      </td>
+      <td>${s.tf}</td>
+      <td><span class="${badge}">${label}</span></td>
+      <td>
+        <button class="btn btn-primary" style="padding:5px 12px;font-size:12px"
+          onclick="applySignal('${s.pair}','${s.isBuy?'LONG':'SHORT'}')">
+          ⚡ Торговать
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function applySignal(pair, side) {
+  showToast(`⚡ Сигнал применён: ${pair} ${side} · Ордер размещён`, 'success');
+  addNotification('success','⚡','Сигнал исполнен',`${pair} ${side} · Открыта позиция`);
+}
+
+// ============================================================
+// BOTS PAGE
+// ============================================================
+function renderBots() {
+  const grid = document.getElementById('botsGrid');
+  if (!grid) return;
+  grid.innerHTML = bots_data.map((b,i) => `
+    <div class="bot-card">
+      <div class="bot-header">
+        <div class="bot-icon" style="background:${b.color}22;color:${b.color}">🤖</div>
+        <div class="bot-info">
+          <div class="bot-name">${b.name}</div>
+          <div class="bot-pair">${b.pair} · ${b.strategy}</div>
+        </div>
+        <div class="toggle-switch ${b.status?'active':''}" onclick="toggleBot(${i},this)">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+      <div class="bot-stats">
+        <div class="bot-stat">
+          <div class="bot-stat-val" style="color:var(--success)">${b.profit}</div>
+          <div class="bot-stat-label">Прибыль</div>
+        </div>
+        <div class="bot-stat">
+          <div class="bot-stat-val" style="color:${b.color}">${b.pct}</div>
+          <div class="bot-stat-label">ROI</div>
+        </div>
+        <div class="bot-stat">
+          <div class="bot-stat-val">${b.trades}</div>
+          <div class="bot-stat-label">Сделок</div>
+        </div>
+        <div class="bot-stat">
+          <div class="bot-stat-val" style="color:var(--success)">${b.wr}</div>
+          <div class="bot-stat-label">Win Rate</div>
+        </div>
+      </div>
+      <div class="bot-actions">
+        <button class="btn btn-ghost" style="flex:1;padding:8px;font-size:12px"
+          onclick="showToast('📊 Статистика ${b.name}','info')">📊 Статистика</button>
+        <button class="btn btn-ghost" style="flex:1;padding:8px;font-size:12px"
+          onclick="showToast('⚙️ Настройки ${b.name}','info')">⚙️ Настройки</button>
+        <button class="btn btn-primary" style="flex:1;padding:8px;font-size:12px"
+          onclick="showToast('🔄 ${b.name} перезапущен','success')">🔄 Restart</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleBot(i, el) {
+  el.classList.toggle('active');
+  const on = el.classList.contains('active');
+  showToast(`${on?'▶️ Запущен':'⏹ Остановлен'}: ${bots_data[i].name}`, on?'success':'warning');
+}
+
+function toggleAllBots() {
+  state.botsRunning = !state.botsRunning;
+  const btn = document.getElementById('botsToggleBtn');
+  if (btn) btn.textContent = state.botsRunning ? '⏸ Стоп все боты' : '▶️ Запустить все';
+  document.querySelectorAll('.toggle-switch').forEach(t => {
+    state.botsRunning ? t.classList.add('active') : t.classList.remove('active');
+  });
+  showToast(state.botsRunning ? '▶️ Все боты запущены' : '⏹ Все боты остановлены',
+            state.botsRunning ? 'success' : 'warning');
+}
+
+// ============================================================
+// ANALYTICS PAGE
+// ============================================================
+function renderMonthlyChart() {
+  const wrap = document.getElementById('monthlyChart');
+  if (!wrap) return;
+  const months = ['Июл','Авг','Сен','Окт','Ноя','Дек','Янв'];
+  const values = [8240, 11340, 14780, 18920, 22410, 28340, 18430];
+  const max    = Math.max(...values);
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:10px;height:180px;padding:0 8px">
+      ${months.map((m,i) => {
+        const h   = (values[i]/max*160);
+        const isLast = i===months.length-1;
+        return `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--success)">
+            +$${(values[i]/1000).toFixed(1)}K
+          </div>
+          <div style="width:100%;height:${h}px;background:${isLast?'var(--gradient-1)':'rgba(108,99,255,0.35)'};
+            border-radius:8px 8px 0 0;transition:all .3s;cursor:pointer;min-height:8px;
+            box-shadow:${isLast?'0 0 20px rgba(108,99,255,.4)':'none'}"
+            onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
+          </div>
+          <div style="font-size:11px;color:var(--text-3)">${m}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  // Analytics table
+  const tbody = document.getElementById('analyticsTable');
+  if (!tbody) return;
+  const data = [
+    { pair:'BTC/USDT',  trades:124, wr:'96.7%', profit:'$41,240', roi:'28.4%', time:'1ч 12м', hot:true  },
+    { pair:'ETH/USDT',  trades:87,  wr:'93.1%', profit:'$28,890', roi:'19.8%', time:'2ч 04м', hot:true  },
+    { pair:'SOL/USDT',  trades:63,  wr:'90.5%', profit:'$14,320', roi:'9.8%',  time:'3ч 17м', hot:false },
+    { pair:'BNB/USDT',  trades:56,  wr:'91.0%', profit:'$11,870', roi:'8.1%',  time:'1ч 48м', hot:false },
+    { pair:'XRP/USDT',  trades:98,  wr:'88.8%', profit:'$8,430',  roi:'5.8%',  time:'45м',    hot:false },
+    { pair:'DOGE/USDT', trades:112, wr:'87.5%', profit:'$6,240',  roi:'4.3%',  time:'32м',    hot:false },
+    { pair:'AVAX/USDT', trades:44,  wr:'86.4%', profit:'$5,120',  roi:'3.5%',  time:'4ч 22м', hot:false },
+    { pair:'LINK/USDT', trades:38,  wr:'84.2%', profit:'$3,890',  roi:'2.7%',  time:'2ч 55м', hot:false },
+    { pair:'DOT/USDT',  trades:29,  wr:'82.8%', profit:'$2,840',  roi:'1.9%',  time:'3ч 40м', hot:false },
+    { pair:'ADA/USDT',  trades:66,  wr:'81.8%', profit:'$1,890',  roi:'1.3%',  time:'1ч 05м', hot:false }
+  ];
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td><strong>${d.pair}</strong> ${d.hot?'🔥':''}</td>
+      <td class="font-mono">${d.trades}</td>
+      <td style="color:var(--success);font-weight:700">${d.wr}</td>
+      <td class="font-mono text-success fw-bold">${d.profit}</td>
+      <td style="color:var(--primary);font-weight:700">${d.roi}</td>
+      <td style="color:var(--text-3)">${d.time}</td>
+      <td><span class="badge-success">✓ Активна</span></td>
+    </tr>`).join('');
+}
+
+// ============================================================
+// HISTORY PAGE
+// ============================================================
+function renderHistory() {
+  const tbody = document.getElementById('historyTable');
+  if (!tbody) return;
+  const rows = [];
+  const bnames = ['ScalpBot','TrendRider','GridMaster','MomentumBot','Ручная'];
+  for (let i=0; i<25; i++) {
+    const pair   = pairs[Math.floor(Math.random()*pairs.length)];
+    const p      = prices[pair] || { price:100 };
+    const isBuy  = Math.random()>.4;
+    const entry  = p.price*(1+(Math.random()*.04-.02));
+    const exit   = p.price*(1+(Math.random()*.06-.02));
+    const vol    = (Math.random()*2+0.05).toFixed(4);
+    const pnl    = ((exit-entry)*(isBuy?1:-1)*parseFloat(vol));
+    const fee    = (entry*parseFloat(vol)*0.001);
+    const d      = new Date(Date.now()-i*3600000*2.3);
+    const bot    = bnames[Math.floor(Math.random()*bnames.length)];
+    rows.push({ pair,isBuy,entry,exit,vol,pnl,fee,bot,d });
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-size:12px;color:var(--text-3)">${r.d.toLocaleDateString('ru-RU')} ${r.d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</td>
+      <td><strong>${r.pair}</strong></td>
+      <td><span class="badge-${r.isBuy?'buy':'sell'}">${r.isBuy?'BUY':'SELL'}</span></td>
+      <td class="font-mono">$${r.entry.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono">$${r.exit.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono">${r.vol}</td>
+      <td class="font-mono text-danger">$${r.fee.toFixed(4)}</td>
+      <td class="font-mono fw-bold ${r.pnl>=0?'text-success':'text-danger'}">
+        ${r.pnl>=0?'+':''}$${Math.abs(r.pnl).toFixed(2)}
+      </td>
+      <td style="font-size:11px;color:var(--text-3)">${r.bot}</td>
+    </tr>`).join('');
+}
+
+function filterHistory(f) {
+  showToast(`🔍 Фильтр: ${f}`, 'info');
+  renderHistory();
+}
+
+// ============================================================
+// PORTFOLIO PAGE
+// ============================================================
+function renderPortfolio() {
+  const tbody = document.getElementById('portfolioTable');
+  if (!tbody) return;
+  const assets = [
+    { coin:'BTC',  name:'Bitcoin',  qty:0.42,    avg:65200,  cur:67432,  icon:'₿' },
+    { coin:'ETH',  name:'Ethereum', qty:3.8,     avg:3720,   cur:3847,   icon:'Ξ' },
+    { coin:'SOL',  name:'Solana',   qty:24,      avg:178.4,  cur:189.4,  icon:'◎' },
+    { coin:'BNB',  name:'BNB',      qty:8,       avg:388,    avg2:412.8, cur:412.8,icon:'⬡'},
+    { coin:'XRP',  name:'Ripple',   qty:8400,    avg:0.598,  cur:0.6234, icon:'✕' },
+    { coin:'DOGE', name:'Dogecoin', qty:12000,   avg:0.168,  cur:0.1823, icon:'Ð' },
+    { coin:'AVAX', name:'Avalanche',qty:48,      avg:36.4,   cur:38.91,  icon:'△' },
+    { coin:'LINK', name:'Chainlink',qty:120,     avg:17.24,  cur:18.74,  icon:'⬡' },
+    { coin:'DOT',  name:'Polkadot', qty:200,     avg:8.12,   cur:8.94,   icon:'●' },
+    { coin:'USDT', name:'Tether',   qty:4830,    avg:1,      cur:1,      icon:'$' },
+    { coin:'BUSD', name:'BUSD',     qty:2100,    avg:1,      cur:1,      icon:'$' },
+    { coin:'ADA',  name:'Cardano',  qty:5000,    avg:0.421,  cur:0.4891, icon:'₳' }
+  ];
+  const totalVal = assets.reduce((a,x)=>a+x.qty*x.cur,0);
+  tbody.innerHTML = assets.map(a => {
+    const val   = a.qty * a.cur;
+    const cost  = a.qty * a.avg;
+    const pnl   = val - cost;
+    const pnlP  = ((pnl/cost)*100).toFixed(2);
+    const share = ((val/totalVal)*100).toFixed(1);
+    return `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--gradient-1);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">${a.icon}</div>
+          <div>
+            <div style="font-weight:700">${a.coin}</div>
+            <div style="font-size:11px;color:var(--text-3)">${a.name}</div>
+          </div>
+        </div>
+      </td>
+      <td class="font-mono">${a.qty.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono">$${a.avg.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono">$${a.cur.toLocaleString('en',{maximumFractionDigits:4})}</td>
+      <td class="font-mono fw-bold">$${val.toLocaleString('en',{maximumFractionDigits:2})}</td>
+      <td class="font-mono fw-bold ${pnl>=0?'text-success':'text-danger'}">
+        ${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}<br>
+        <span style="font-size:11px">(${pnl>=0?'+':''}${pnlP}%)</span>
+      </td>
+      <td style="color:var(--primary);font-weight:700">${share}%</td>
+      <td>
+        <div style="width:80px;height:6px;background:rgba(255,255,255,.07);border-radius:4px">
+          <div style="width:${share}%;max-width:100%;height:100%;background:var(--gradient-1);border-radius:4px"></div>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-primary" style="padding:4px 8px;font-size:11px"
+            onclick="showToast('🟢 Покупка ${a.coin}','success')">Купить</button>
+          <button class="btn btn-danger" style="padding:4px 8px;font-size:11px"
+            onclick="showToast('🔴 Продажа ${a.coin}','warning')">Продать</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function renderNotifications() {
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  if (!state.notifications.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3)">🔔 Нет уведомлений</div>';
+    return;
+  }
+  list.innerHTML = state.notifications.map(n => `
+    <div class="notif-item ${n.read?'':'notif-unread'}" id="notif-${n.id}">
+      <div class="notif-icon notif-${n.type}">${n.icon}</div>
+      <div class="notif-body">
+        <div class="notif-title">${n.title} ${n.read?'':'<span class="unread-dot"></span>'}</div>
+        <div class="notif-text">${n.text}</div>
+        <div class="notif-time">${n.time}</div>
+      </div>
+      <button class="notif-close" onclick="removeNotif(${n.id})">✕</button>
+    </div>`).join('');
+
+  // Update badge
+  const unread = state.notifications.filter(n=>!n.read).length;
+  const badge  = document.getElementById('notifBadge');
+  if (badge) { badge.textContent = unread; badge.style.display = unread?'flex':'none'; }
+}
+
+function addNotification(type, icon, title, text) {
+  const n = { id: Date.now(), type, icon, title, text, time:'Только что', read:false };
+  state.notifications.unshift(n);
+  if (state.notifications.length > 50) state.notifications.pop();
+  const badge = document.getElementById('notifBadge');
+  const unread = state.notifications.filter(x=>!x.read).length;
+  if (badge) { badge.textContent = unread; badge.style.display = 'flex'; }
+  if (state.currentPage === 'notifications') renderNotifications();
+}
+
+function removeNotif(id) {
+  state.notifications = state.notifications.filter(n=>n.id!==id);
+  renderNotifications();
+}
+
+function markAllRead() {
+  state.notifications.forEach(n=>n.read=true);
+  renderNotifications();
+  showToast('✓ Все уведомления прочитаны','success');
+}
+
+function clearNotifs() {
+  state.notifications = [];
+  renderNotifications();
+  showToast('🗑 Уведомления очищены','info');
+}
+
+// ============================================================
+// LIVE PRICE UPDATES
+// ============================================================
+function startLivePrices() {
+  setInterval(() => {
+    Object.keys(prices).forEach(pair => {
+      const change = (Math.random()-0.495)*0.004;
+      prices[pair].price = +(prices[pair].price*(1+change)).toFixed(prices[pair].price>100?2:6);
+      prices[pair].change = +(prices[pair].change + (Math.random()-0.5)*0.1).toFixed(2);
+    });
+    updateTickerBar();
+    updateDashMetrics();
+    if (state.currentPage==='trading') {
+      updateChartHeader();
+      renderOrderBook();
+    }
+    if (state.currentPage==='dashboard') {
+      renderOpenPositions();
+    }
+  }, 2000);
+}
+
+function updateTickerBar() {
+  const bar = document.getElementById('tickerTrack');
+  if (!bar) return;
+  bar.innerHTML = Object.entries(prices).map(([pair,d]) => `
+    <span class="ticker-item">
+      <span class="ticker-pair">${pair}</span>
+      <span class="ticker-price">$${d.price.toLocaleString('en',{maximumFractionDigits:d.price>100?2:6})}</span>
+      <span class="ticker-change ${d.change>=0?'change-pos':'change-neg'}">${d.change>=0?'+':''}${d.change}%</span>
+    </span>
+  `).join('') + bar.innerHTML.split('</span>').slice(-1)[0];
+}
+
+function updateDashMetrics() {
+  const btc = prices['BTC/USDT'];
+  const el  = document.getElementById('btcPriceMetric');
+  if (el) {
+    el.textContent = '$'+btc.price.toLocaleString('en',{maximumFractionDigits:2});
+  }
+}
+
+function updateChartHeader() {
+  const sym = document.getElementById('chartSymbol');
+  if (!sym) return;
+  const p = prices[sym.value] || { price:100, change:0 };
+  const pel = document.getElementById('chartPriceLive');
+  const cel = document.getElementById('chartChangeLive');
+  if (pel) pel.textContent = '$'+p.price.toLocaleString('en',{maximumFractionDigits:4});
+  if (cel) {
+    cel.textContent = (p.change>=0?'+':'')+p.change+'%';
+    cel.className   = 'chart-change '+(p.change>=0?'change-pos':'change-neg');
+  }
+}
+
+// ============================================================
+// SIGNAL STREAM
+// ============================================================
+function startSignalStream() {
+  setInterval(() => {
+    const newSig = generateSignals(1)[0];
+    state.signals.unshift(newSig);
+    if (state.signals.length > 30) state.signals.pop();
+    if (state.currentPage==='signals') renderSignalsTable();
+    if (state.currentPage==='dashboard') renderDashSignals();
+    if (newSig.conf >= 90) {
+      addNotification('success','⚡','Горячий сигнал ИИ',
+        `${newSig.pair} ${newSig.isBuy?'LONG':'SHORT'} · ${newSig.conf}% уверенность`);
+      showToast(`⚡ Горячий сигнал: ${newSig.pair} ${newSig.isBuy?'▲':'▼'} ${newSig.conf}%`, 'success');
+    }
+  }, 15000);
+}
+
+// ============================================================
+// NOTIFICATION STREAM
+// ============================================================
+function startNotifStream() {
+  const msgs = [
+    ['success','💰','Прибыль зафиксирована','ScalpBot Pro +$340 · BTC/USDT'],
+    ['info','📊','Анализ завершён','ИИ проанализировал 50+ пар · Сигналы обновлены'],
+    ['success','🤖','Бот завершил цикл','TrendRider AI · 12 сделок · +$180'],
+    ['warning','⚠️','Волатильность рынка','BTC резкое движение · Боты адаптируются'],
+    ['success','🎯','Цель достигнута','ETH/USDT Take-Profit +4.8% · +$482']
+  ];
+  setInterval(() => {
+    const [type,icon,title,text] = msgs[Math.floor(Math.random()*msgs.length)];
+    addNotification(type,icon,title,text);
+  }, 30000);
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, type='info') {
+  const c   = document.getElementById('toastContainer');
+  const div = document.createElement('div');
+  div.className = `toast toast-${type}`;
+  div.innerHTML = `<span>${msg}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px;padding:0 0 0 12px">✕</button>`;
+  c.appendChild(div);
+  setTimeout(()=>div.classList.add('show'),10);
+  setTimeout(()=>{ div.classList.remove('show'); setTimeout(()=>div.remove(),400); },4000);
+}
+
+// ============================================================
+// CONFIRM MODAL
+// ============================================================
+function confirmAction(msg) {
+  document.getElementById('confirmText').textContent = msg;
+  document.getElementById('confirmModal').style.display = 'flex';
+}
+function closeConfirm() {
+  document.getElementById('confirmModal').style.display = 'none';
+}
+function doConfirm() {
+  closeConfirm();
+  showToast('✅ Действие выполнено','success');
+}
+
+// ============================================================
+// CLOSE MODALS ON OVERLAY CLICK
+// ============================================================
+document.getElementById('authModal').addEventListener('click', function(e) {
+  if (e.target===this) closeAuth();
+});
+document.getElementById('confirmModal').addEventListener('click', function(e) {
+  if (e.target===this) closeConfirm();
+});
+
+// ============================================================
+// PRICING PLAN SELECTION
+// ============================================================
+function selectPlan(plan) {
+  const prices_plans = { starter:'$29', pro:'$99', elite:'$249' };
+  openAuth('register');
+  showToast(`💎 Выбран план: ${plan.toUpperCase()} · ${prices_plans[plan]}/мес`, 'success');
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (!state.loggedIn) return;
+  if (e.key==='Escape') { closeAuth(); closeConfirm(); }
+  if (e.ctrlKey && e.key==='1') switchPage('dashboard');
+  if (e.ctrlKey && e.key==='2') switchPage('trading');
+  if (e.ctrlKey && e.key==='3') switchPage('signals');
+  if (e.ctrlKey && e.key==='4') switchPage('bots');
+});
+
+// ============================================================
+// RESPONSIVE SIDEBAR
+// ============================================================
+window.addEventListener('resize', () => {
+  if (window.innerWidth >= 900) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+});
+
+// ============================================================
+// TICKER INIT ON LANDING
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  updateTickerBar();
+  // Landing ticker animation restart
+  setInterval(updateTickerBar, 5000);
+});
+
+</script>
+</body>
+</html>
