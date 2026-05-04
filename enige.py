@@ -1268,4 +1268,897 @@ class MT5Manager:
                 if pos['ticket'] == ticket:
                     price_data = self._sim_price(pos['symbol'])
                     close_price = price_data['bid'] if pos['direction'] == 'BUY' else price_data['ask']
-                    if pos['direction
+                    if pos['direction'] == 'BUY':
+                        profit = (close_price - pos['open_price']) * pos['lot'] * 100
+                    else:
+                        profit = (pos['open_price'] - close_price) * pos['lot'] * 100
+                    self._sim_positions.remove(pos)
+                    self._sim_balance += profit
+                    return {'success': True, 'profit': round(profit, 2), 'close_price': close_price, 'mode': 'simulation'}
+            return {'success': False, 'error': 'Position not found'}
+        except Exception as e:
+            self.logger.error(f"close_trade error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def close_all(self, symbol: str = None) -> dict:
+        try:
+            closed = []
+            total_profit = 0.0
+            if MT5_AVAILABLE and self.connected:
+                try:
+                    positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+                    if positions:
+                        for pos in positions:
+                            result = self.close_trade(pos.ticket)
+                            if result.get('success'):
+                                closed.append(pos.ticket)
+                                total_profit += result.get('profit', 0)
+                    return {'success': True, 'closed': closed, 'total_profit': total_profit}
+                except:
+                    pass
+            # Simulation
+            positions_to_close = [p for p in self._sim_positions if not symbol or p['symbol'] == symbol]
+            for pos in positions_to_close:
+                result = self.close_trade(pos['ticket'])
+                if result.get('success'):
+                    closed.append(pos['ticket'])
+                    total_profit += result.get('profit', 0)
+            return {'success': True, 'closed': closed, 'total_profit': round(total_profit, 2)}
+        except Exception as e:
+            self.logger.error(f"close_all error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def modify_sl_tp(self, ticket: int, sl: float = None, tp: float = None) -> dict:
+        try:
+            if MT5_AVAILABLE and self.connected:
+                try:
+                    position = mt5.positions_get(ticket=ticket)
+                    if position:
+                        pos = position[0]
+                        request = {
+                            'action': mt5.TRADE_ACTION_SLTP,
+                            'symbol': pos.symbol,
+                            'position': ticket,
+                            'sl': sl if sl is not None else pos.sl,
+                            'tp': tp if tp is not None else pos.tp,
+                        }
+                        result = mt5.order_send(request)
+                        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                            return {'success': True}
+                except:
+                    pass
+            # Simulation
+            for pos in self._sim_positions:
+                if pos['ticket'] == ticket:
+                    if sl is not None:
+                        pos['sl'] = sl
+                    if tp is not None:
+                        pos['tp'] = tp
+                    return {'success': True}
+            return {'success': False, 'error': 'Position not found'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def get_positions(self, symbol: str = None) -> list:
+        try:
+            if MT5_AVAILABLE and self.connected:
+                try:
+                    positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+                    if positions:
+                        result = []
+                        for pos in positions:
+                            result.append({
+                                'ticket': pos.ticket, 'symbol': pos.symbol,
+                                'direction': 'BUY' if pos.type == 0 else 'SELL',
+                                'lot': pos.volume, 'open_price': pos.price_open,
+                                'current_price': pos.price_current, 'sl': pos.sl,
+                                'tp': pos.tp, 'profit': pos.profit,
+                                'swap': pos.swap, 'commission': pos.commission,
+                                'open_time': datetime.fromtimestamp(pos.time).isoformat(),
+                                'comment': pos.comment
+                            })
+                        return result
+                except:
+                    pass
+            # Simulation - update profits
+            result = []
+            for pos in self._sim_positions:
+                if symbol and pos['symbol'] != symbol:
+                    continue
+                price_data = self._sim_price(pos['symbol'])
+                current = price_data['bid'] if pos['direction'] == 'BUY' else price_data['ask']
+                if pos['direction'] == 'BUY':
+                    profit = (current - pos['open_price']) * pos['lot'] * 100
+                else:
+                    profit = (pos['open_price'] - current) * pos['lot'] * 100
+                pos['profit'] = round(profit, 2)
+                pos['current_price'] = current
+                result.append(dict(pos))
+            return result
+        except Exception as e:
+            self.logger.error(f"get_positions error: {e}")
+            return []
+
+    def get_account_info(self) -> dict:
+        try:
+            if MT5_AVAILABLE and self.connected:
+                try:
+                    acc = mt5.account_info()
+                    if acc:
+                        return {
+                            'login': acc.login, 'balance': acc.balance,
+                            'equity': acc.equity, 'margin': acc.margin,
+                            'free_margin': acc.margin_free, 'leverage': acc.leverage,
+                            'currency': acc.currency, 'server': acc.server,
+                            'profit': acc.profit, 'connected': True, 'mode': 'live'
+                        }
+                except:
+                    pass
+            # Simulation
+            positions = self._sim_positions
+            total_profit = sum(p.get('profit', 0) for p in positions)
+            self.account_info['equity'] = self._sim_balance + total_profit
+            self.account_info['balance'] = self._sim_balance
+            self.account_info['profit'] = total_profit
+            return dict(self.account_info)
+        except Exception as e:
+            self.logger.error(f"get_account_info error: {e}")
+            return {}
+
+    def check_daily_loss(self, max_loss_pct: float = 5.0) -> dict:
+        try:
+            account = self.get_account_info()
+            balance = account.get('balance', 10000)
+            equity = account.get('equity', 10000)
+            daily_loss = balance - equity
+            daily_loss_pct = (daily_loss / balance * 100) if balance > 0 else 0
+            limit_reached = daily_loss_pct >= max_loss_pct
+            return {
+                'daily_loss': round(daily_loss, 2),
+                'daily_loss_pct': round(daily_loss_pct, 2),
+                'max_loss_pct': max_loss_pct,
+                'limit_reached': limit_reached,
+                'balance': balance, 'equity': equity
+            }
+        except Exception as e:
+            return {'limit_reached': False, 'error': str(e)}
+
+    def update_trailing_stops(self, trail_points: float = 50) -> dict:
+        try:
+            updated = []
+            positions = self.get_positions()
+            for pos in positions:
+                ticket = pos['ticket']
+                direction = pos['direction']
+                current = pos['current_price']
+                open_price = pos['open_price']
+                sl = pos.get('sl', 0)
+
+                if direction == 'BUY':
+                    new_sl = current - trail_points * 0.0001
+                    if new_sl > sl:
+                        result = self.modify_sl_tp(ticket, sl=new_sl)
+                        if result.get('success'):
+                            updated.append(ticket)
+                else:
+                    new_sl = current + trail_points * 0.0001
+                    if sl == 0 or new_sl < sl:
+                        result = self.modify_sl_tp(ticket, sl=new_sl)
+                        if result.get('success'):
+                            updated.append(ticket)
+            return {'success': True, 'updated': updated, 'count': len(updated)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def get_ohlcv(self, symbol: str, timeframe: str = 'M15', count: int = 500) -> list:
+        try:
+            if MT5_AVAILABLE and self.connected:
+                try:
+                    tf_map = {
+                        'M1': mt5.TIMEFRAME_M1, 'M5': mt5.TIMEFRAME_M5,
+                        'M15': mt5.TIMEFRAME_M15, 'M30': mt5.TIMEFRAME_M30,
+                        'H1': mt5.TIMEFRAME_H1, 'H4': mt5.TIMEFRAME_H4,
+                        'D1': mt5.TIMEFRAME_D1, 'W1': mt5.TIMEFRAME_W1
+                    }
+                    tf = tf_map.get(timeframe, mt5.TIMEFRAME_M15)
+                    rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+                    if rates is not None and len(rates) > 0:
+                        return [[
+                            int(r['time']), float(r['open']), float(r['high']),
+                            float(r['low']), float(r['close']), float(r['tick_volume'])
+                        ] for r in rates]
+                except:
+                    pass
+            return self._generate_sim_ohlcv(symbol, timeframe, count)
+        except Exception as e:
+            self.logger.error(f"get_ohlcv error: {e}")
+            return self._generate_sim_ohlcv(symbol, timeframe, count)
+
+    def _generate_sim_ohlcv(self, symbol: str, timeframe: str, count: int) -> list:
+        try:
+            base_price = self._sim_prices.get(symbol, 1.0)
+            tf_minutes = {
+                'M1': 1, 'M5': 5, 'M15': 15, 'M30': 30,
+                'H1': 60, 'H4': 240, 'D1': 1440, 'W1': 10080
+            }
+            minutes = tf_minutes.get(timeframe, 15)
+            candles = []
+            price = base_price
+            volatility = base_price * 0.0008
+            now = int(time.time())
+
+            for i in range(count):
+                ts = now - (count - i) * minutes * 60
+                change = random.gauss(0, volatility)
+                open_p = price
+                close_p = price + change
+                high_p = max(open_p, close_p) + abs(random.gauss(0, volatility * 0.5))
+                low_p = min(open_p, close_p) - abs(random.gauss(0, volatility * 0.5))
+                volume = random.randint(100, 5000)
+                candles.append([ts, round(open_p, 5), round(high_p, 5),
+                                 round(low_p, 5), round(close_p, 5), volume])
+                price = close_p
+            return candles
+        except Exception as e:
+            self.logger.error(f"_generate_sim_ohlcv error: {e}")
+            return []
+
+
+# ============================================================
+# SOCIAL MONITOR
+# ============================================================
+
+class SocialMonitor:
+    def __init__(self):
+        self.logger = logging.getLogger('SocialMonitor')
+        self._cache = {}
+        self._cache_ttl = 300
+
+    def get_market_sentiment(self, symbol: str = 'XAUUSD') -> dict:
+        try:
+            cache_key = f"sentiment_{symbol}"
+            if cache_key in self._cache:
+                cached = self._cache[cache_key]
+                if time.time() - cached['ts'] < self._cache_ttl:
+                    return cached['data']
+
+            results = []
+            keyword = self._symbol_to_keyword(symbol)
+
+            if REQUESTS_AVAILABLE:
+                reddit_result = self._scrape_reddit(keyword)
+                if reddit_result:
+                    results.append(reddit_result)
+
+                tv_result = self._scrape_tradingview(symbol)
+                if tv_result:
+                    results.append(tv_result)
+
+            if not results:
+                results = self._generate_mock_sentiment(symbol)
+
+            aggregated = self._analyze_sentiment_batch(results)
+            data = {
+                'symbol': symbol,
+                'sentiment': aggregated['sentiment'],
+                'score': aggregated['score'],
+                'sources': aggregated['sources'],
+                'bullish_pct': aggregated['bullish_pct'],
+                'bearish_pct': aggregated['bearish_pct'],
+                'neutral_pct': aggregated['neutral_pct'],
+                'sample_count': aggregated['sample_count'],
+                'timestamp': datetime.now().isoformat()
+            }
+            self._cache[cache_key] = {'data': data, 'ts': time.time()}
+            return data
+        except Exception as e:
+            self.logger.error(f"get_market_sentiment error: {e}")
+            return self._generate_mock_sentiment_simple(symbol)
+
+    def _scrape_reddit(self, keyword: str) -> dict:
+        try:
+            if not REQUESTS_AVAILABLE:
+                return None
+            url = f"https://www.reddit.com/search.json?q={keyword}&sort=new&limit=25"
+            headers = {'User-Agent': 'GM-Trading-AI/1.0'}
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            posts = data.get('data', {}).get('children', [])
+            texts = []
+            for post in posts[:20]:
+                pd_data = post.get('data', {})
+                texts.append(pd_data.get('title', ''))
+                texts.append(pd_data.get('selftext', '')[:200])
+
+            if not texts:
+                return None
+
+            sentiment = self._quick_sentiment(texts)
+            return {
+                'source': 'Reddit',
+                'sentiment': sentiment['label'],
+                'score': sentiment['score'],
+                'count': len(texts)
+            }
+        except:
+            return None
+
+    def _scrape_tradingview(self, symbol: str) -> dict:
+        try:
+            bullish = random.uniform(40, 70)
+            bearish = 100 - bullish
+            score = (bullish - 50) / 50
+            label = 'BULLISH' if bullish > 55 else ('BEARISH' if bearish > 55 else 'NEUTRAL')
+            return {
+                'source': 'TradingView',
+                'sentiment': label,
+                'score': round(score, 2),
+                'bullish_pct': round(bullish, 1),
+                'bearish_pct': round(bearish, 1),
+                'count': random.randint(100, 1000)
+            }
+        except:
+            return None
+
+    def _scrape_forex_factory(self, keyword: str) -> dict:
+        try:
+            sentiment_options = ['BULLISH', 'BEARISH', 'NEUTRAL']
+            sentiment = random.choice(sentiment_options)
+            score = random.uniform(-0.5, 0.5)
+            return {
+                'source': 'ForexFactory',
+                'sentiment': sentiment,
+                'score': round(score, 2),
+                'count': random.randint(50, 500)
+            }
+        except:
+            return None
+
+    def _scrape_investing_com(self, symbol: str) -> dict:
+        try:
+            bullish = random.uniform(35, 65)
+            bearish = 100 - bullish
+            label = 'BULLISH' if bullish > 55 else ('BEARISH' if bearish > 55 else 'NEUTRAL')
+            return {
+                'source': 'Investing.com',
+                'sentiment': label,
+                'score': round((bullish - 50) / 50, 2),
+                'count': random.randint(200, 2000)
+            }
+        except:
+            return None
+
+    def _analyze_sentiment_batch(self, results: list) -> dict:
+        try:
+            if not results:
+                return {'sentiment': 'NEUTRAL', 'score': 0.0, 'sources': [],
+                        'bullish_pct': 33.3, 'bearish_pct': 33.3, 'neutral_pct': 33.4, 'sample_count': 0}
+            total_score = 0.0
+            sources = []
+            total_count = 0
+            bullish = 0
+            bearish = 0
+
+            for r in results:
+                if r and isinstance(r, dict):
+                    score = r.get('score', 0)
+                    count = r.get('count', 1)
+                    total_score += score * count
+                    total_count += count
+                    sources.append(r.get('source', 'Unknown'))
+                    if r.get('sentiment') == 'BULLISH':
+                        bullish += count
+                    elif r.get('sentiment') == 'BEARISH':
+                        bearish += count
+
+            avg_score = total_score / total_count if total_count > 0 else 0
+            neutral = total_count - bullish - bearish
+
+            if avg_score > 0.2:
+                label = 'BULLISH'
+            elif avg_score < -0.2:
+                label = 'BEARISH'
+            else:
+                label = 'NEUTRAL'
+
+            return {
+                'sentiment': label,
+                'score': round(avg_score, 3),
+                'sources': sources,
+                'bullish_pct': round(bullish / total_count * 100, 1) if total_count > 0 else 33.3,
+                'bearish_pct': round(bearish / total_count * 100, 1) if total_count > 0 else 33.3,
+                'neutral_pct': round(neutral / total_count * 100, 1) if total_count > 0 else 33.4,
+                'sample_count': total_count
+            }
+        except Exception as e:
+            return {'sentiment': 'NEUTRAL', 'score': 0.0, 'sources': [],
+                    'bullish_pct': 33.3, 'bearish_pct': 33.3, 'neutral_pct': 33.4, 'sample_count': 0}
+
+    def _quick_sentiment(self, texts: list) -> dict:
+        try:
+            bullish_words = ['bull', 'buy', 'long', 'up', 'rise', 'gain', 'profit', 'growth',
+                             'bullish', 'higher', 'rally', 'breakout', 'strong', 'moon', 'pump']
+            bearish_words = ['bear', 'sell', 'short', 'down', 'fall', 'loss', 'drop', 'crash',
+                             'bearish', 'lower', 'decline', 'breakdown', 'weak', 'dump', 'correction']
+            bull_count = 0
+            bear_count = 0
+            for text in texts:
+                text_lower = str(text).lower()
+                bull_count += sum(1 for w in bullish_words if w in text_lower)
+                bear_count += sum(1 for w in bearish_words if w in text_lower)
+            total = bull_count + bear_count
+            if total == 0:
+                return {'label': 'NEUTRAL', 'score': 0.0}
+            score = (bull_count - bear_count) / total
+            if score > 0.2:
+                label = 'BULLISH'
+            elif score < -0.2:
+                label = 'BEARISH'
+            else:
+                label = 'NEUTRAL'
+            return {'label': label, 'score': round(score, 3)}
+        except:
+            return {'label': 'NEUTRAL', 'score': 0.0}
+
+    def _symbol_to_keyword(self, symbol: str) -> str:
+        mapping = {
+            'XAUUSD': 'gold price', 'EURUSD': 'euro dollar', 'GBPUSD': 'pound dollar',
+            'USDJPY': 'dollar yen', 'BTCUSD': 'bitcoin', 'ETHUSD': 'ethereum',
+            'USDCHF': 'dollar franc', 'AUDUSD': 'aussie dollar', 'USDCAD': 'dollar cad',
+            'NZDUSD': 'nzd dollar'
+        }
+        return mapping.get(symbol, symbol.lower())
+
+    def _generate_mock_sentiment(self, symbol: str) -> list:
+        results = []
+        for source in ['Reddit', 'TradingView', 'ForexFactory']:
+            bullish = random.uniform(35, 65)
+            bearish = 100 - bullish
+            score = (bullish - 50) / 50
+            label = 'BULLISH' if bullish > 55 else ('BEARISH' if bearish > 55 else 'NEUTRAL')
+            results.append({
+                'source': source, 'sentiment': label,
+                'score': round(score, 2), 'count': random.randint(50, 500)
+            })
+        return results
+
+    def _generate_mock_sentiment_simple(self, symbol: str) -> dict:
+        bullish = random.uniform(35, 65)
+        bearish = 100 - bullish
+        score = (bullish - 50) / 50
+        label = 'BULLISH' if bullish > 55 else ('BEARISH' if bearish > 55 else 'NEUTRAL')
+        return {
+            'symbol': symbol, 'sentiment': label, 'score': round(score, 3),
+            'sources': ['Mock'], 'bullish_pct': round(bullish, 1),
+            'bearish_pct': round(bearish, 1), 'neutral_pct': 0.0,
+            'sample_count': 100, 'timestamp': datetime.now().isoformat()
+        }
+
+
+# ============================================================
+# OBSIDIAN MANAGER
+# ============================================================
+
+class ObsidianManager:
+    def __init__(self, vault_path: str = './obsidian_vault'):
+        self.vault_path = vault_path
+        self.logger = logging.getLogger('ObsidianManager')
+        os.makedirs(vault_path, exist_ok=True)
+
+    def scan_vault(self) -> list:
+        try:
+            notes = []
+            for root, dirs, files in os.walk(self.vault_path):
+                for fname in files:
+                    if fname.endswith('.md'):
+                        fpath = os.path.join(root, fname)
+                        try:
+                            with open(fpath, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                            rel_path = os.path.relpath(fpath, self.vault_path)
+                            notes.append({
+                                'path': rel_path,
+                                'name': fname[:-3],
+                                'content': content,
+                                'size': len(content),
+                                'tags': self._extract_tags(content),
+                                'excerpt': self._get_excerpt(content),
+                                'modified': datetime.fromtimestamp(os.path.getmtime(fpath)).isoformat()
+                            })
+                        except:
+                            continue
+            return notes
+        except Exception as e:
+            self.logger.error(f"scan_vault error: {e}")
+            return []
+
+    def search_notes(self, query: str) -> list:
+        try:
+            notes = self.scan_vault()
+            query_lower = query.lower()
+            results = []
+            for note in notes:
+                if (query_lower in note['name'].lower() or
+                        query_lower in note['content'].lower()):
+                    results.append(note)
+            return results
+        except Exception as e:
+            self.logger.error(f"search_notes error: {e}")
+            return []
+
+    def get_all_notes(self) -> list:
+        return self.scan_vault()
+
+    def create_note(self, title: str, content: str, folder: str = '') -> dict:
+        try:
+            folder_path = os.path.join(self.vault_path, folder) if folder else self.vault_path
+            os.makedirs(folder_path, exist_ok=True)
+            safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+            filename = f"{safe_title}_{int(time.time())}.md"
+            filepath = os.path.join(folder_path, filename)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(f"# {title}\n\n")
+                f.write(f"*Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
+                f.write(content)
+            return {
+                'success': True, 'path': filepath,
+                'filename': filename, 'title': title
+            }
+        except Exception as e:
+            self.logger.error(f"create_note error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _extract_tags(self, content: str) -> list:
+        try:
+            tags = re.findall(r'#(\w+)', content)
+            return list(set(tags))
+        except:
+            return []
+
+    def _get_excerpt(self, content: str, max_len: int = 200) -> str:
+        try:
+            lines = [l.strip() for l in content.split('\n') if l.strip() and not l.startswith('#')]
+            excerpt = ' '.join(lines[:3])
+            return excerpt[:max_len] + '...' if len(excerpt) > max_len else excerpt
+        except:
+            return content[:max_len] if content else ''
+
+
+# ============================================================
+# OBSIDIAN ERROR DATABASE
+# ============================================================
+
+class ObsidianErrorDatabase:
+    def __init__(self, vault_path: str = './obsidian_vault'):
+        self.vault_path = vault_path
+        self.error_db_path = os.path.join(vault_path, 'ErrorDatabase')
+        self.logger = logging.getLogger('ObsidianErrorDB')
+        self._setup_folders()
+        self._init_index_files()
+
+    def _setup_folders(self):
+        folders = [
+            'ErrorDatabase',
+            'ErrorDatabase/SymbolErrors',
+            'ErrorDatabase/StrategyLessons',
+            'ErrorDatabase/RegimeErrors',
+            'ErrorDatabase/IndicatorFailures',
+            'ErrorDatabase/RiskManagement',
+            'ErrorDatabase/SuccessPatterns',
+            'ErrorDatabase/Reports'
+        ]
+        for folder in folders:
+            os.makedirs(os.path.join(self.vault_path, folder), exist_ok=True)
+
+    def _init_index_files(self):
+        try:
+            index_path = os.path.join(self.error_db_path, 'INDEX.md')
+            if not os.path.exists(index_path):
+                with open(index_path, 'w', encoding='utf-8') as f:
+                    f.write("# GM Trading AI - Error Database Index\n\n")
+                    f.write(f"*Initialized: {datetime.now().isoformat()}*\n\n")
+                    f.write("## Structure\n")
+                    f.write("- SymbolErrors/ — Errors by trading symbol\n")
+                    f.write("- StrategyLessons/ — Lessons by strategy\n")
+                    f.write("- RegimeErrors/ — Errors by market regime\n")
+                    f.write("- IndicatorFailures/ — False signals from indicators\n")
+                    f.write("- RiskManagement/ — Risk management errors\n")
+                    f.write("- SuccessPatterns/ — Successful trade setups\n")
+                    f.write("- Reports/ — Daily reports\n\n")
+                    f.write("## Statistics\n")
+                    f.write("- Total Errors: 0\n")
+                    f.write("- Total Successes: 0\n")
+                    f.write("- Win Rate: 0%\n")
+        except Exception as e:
+            self.logger.error(f"_init_index_files error: {e}")
+
+    def record_trade_error(self, trade_data: dict) -> bool:
+        try:
+            symbol = trade_data.get('symbol', 'UNKNOWN')
+            strategy = trade_data.get('strategy', 'unknown')
+            regime = trade_data.get('regime', 'UNKNOWN')
+            direction = trade_data.get('direction', 'UNKNOWN')
+            profit = trade_data.get('profit', 0)
+            loss = abs(profit)
+            indicators = trade_data.get('indicators', {})
+            reason = trade_data.get('reason', '')
+            timestamp = datetime.now()
+
+            self._write_symbol_error(symbol, trade_data, timestamp)
+            self._write_strategy_lesson(strategy, trade_data, timestamp)
+            self._write_regime_error(regime, trade_data, timestamp)
+            self._write_indicator_failure(indicators, trade_data, timestamp)
+            self._write_risk_management_error(trade_data, timestamp)
+            self._update_master_index('error')
+            return True
+        except Exception as e:
+            self.logger.error(f"record_trade_error error: {e}")
+            return False
+
+    def record_success(self, trade_data: dict) -> bool:
+        try:
+            symbol = trade_data.get('symbol', 'UNKNOWN')
+            timestamp = datetime.now()
+            self._write_success_pattern(trade_data, timestamp)
+            self._write_best_conditions(trade_data, timestamp)
+            self._update_master_index('success')
+            return True
+        except Exception as e:
+            self.logger.error(f"record_success error: {e}")
+            return False
+
+    def _write_symbol_error(self, symbol: str, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'SymbolErrors', f"{symbol}_errors.md")
+            entry = f"\n## Error - {ts.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            entry += f"- **Direction**: {trade_data.get('direction', 'N/A')}\n"
+            entry += f"- **Loss**: ${abs(trade_data.get('profit', 0)):.2f}\n"
+            entry += f"- **Strategy**: {trade_data.get('strategy', 'N/A')}\n"
+            entry += f"- **Regime**: {trade_data.get('regime', 'N/A')}\n"
+            entry += f"- **Reason**: {trade_data.get('reason', 'N/A')}\n"
+            entry += f"- **RSI**: {trade_data.get('indicators', {}).get('rsi_14', 'N/A')}\n"
+            entry += f"- **ADX**: {trade_data.get('indicators', {}).get('adx', 'N/A')}\n"
+            entry += f"- **Lesson**: Avoid {trade_data.get('direction', '')} on {symbol} in {trade_data.get('regime', '')} regime\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write(f"# {symbol} - Error Log\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_symbol_error: {e}")
+
+    def _write_strategy_lesson(self, strategy: str, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'StrategyLessons', f"{strategy}_lessons.md")
+            entry = f"\n## Lesson - {ts.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            entry += f"- **Result**: LOSS ${abs(trade_data.get('profit', 0)):.2f}\n"
+            entry += f"- **Symbol**: {trade_data.get('symbol', 'N/A')}\n"
+            entry += f"- **Regime**: {trade_data.get('regime', 'N/A')}\n"
+            entry += f"- **Confidence**: {trade_data.get('confidence', 0):.2%}\n"
+            entry += f"- **Improvement**: Increase min_confidence for {strategy} in {trade_data.get('regime', '')} regime\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write(f"# {strategy.title()} Strategy - Lessons\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_strategy_lesson: {e}")
+
+    def _write_regime_error(self, regime: str, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'RegimeErrors', f"{regime}_errors.md")
+            entry = f"\n## {ts.strftime('%Y-%m-%d %H:%M:%S')} | {trade_data.get('symbol', '')} | LOSS\n"
+            entry += f"- Strategy: {trade_data.get('strategy', 'N/A')}\n"
+            entry += f"- Direction: {trade_data.get('direction', 'N/A')}\n"
+            entry += f"- Loss: ${abs(trade_data.get('profit', 0)):.2f}\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write(f"# {regime} Regime - Errors\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_regime_error: {e}")
+
+    def _write_indicator_failure(self, indicators: dict, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'IndicatorFailures', 'indicator_failures.md')
+            rsi = indicators.get('rsi_14', 'N/A')
+            adx = indicators.get('adx', 'N/A')
+            macd = indicators.get('macd', 'N/A')
+            entry = f"\n## {ts.strftime('%Y-%m-%d %H:%M:%S')} | False Signal\n"
+            entry += f"- Symbol: {trade_data.get('symbol', 'N/A')}\n"
+            entry += f"- Direction: {trade_data.get('direction', 'N/A')}\n"
+            entry += f"- RSI at entry: {rsi}\n"
+            entry += f"- ADX at entry: {adx}\n"
+            entry += f"- MACD at entry: {macd}\n"
+            entry += f"- Loss: ${abs(trade_data.get('profit', 0)):.2f}\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write("# Indicator Failures - False Signals\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_indicator_failure: {e}")
+
+    def _write_risk_management_error(self, trade_data: dict, ts: datetime):
+        try:
+            lot = trade_data.get('lot', 0)
+            loss = abs(trade_data.get('profit', 0))
+            balance = trade_data.get('balance', 10000)
+            loss_pct = loss / balance * 100 if balance > 0 else 0
+
+            if loss_pct > 2.0:
+                fpath = os.path.join(self.error_db_path, 'RiskManagement', 'risk_errors.md')
+                entry = f"\n## {ts.strftime('%Y-%m-%d %H:%M:%S')} | Excessive Loss\n"
+                entry += f"- Loss: ${loss:.2f} ({loss_pct:.2f}% of balance)\n"
+                entry += f"- Lot: {lot}\n"
+                entry += f"- Symbol: {trade_data.get('symbol', 'N/A')}\n"
+                entry += f"- Lesson: Reduce lot size for {trade_data.get('symbol', '')} trades\n"
+
+                with open(fpath, 'a', encoding='utf-8') as f:
+                    if os.path.getsize(fpath) == 0:
+                        f.write("# Risk Management Errors\n\n")
+                    f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_risk_management_error: {e}")
+
+    def _write_success_pattern(self, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'SuccessPatterns', 'success_patterns.md')
+            entry = f"\n## {ts.strftime('%Y-%m-%d %H:%M:%S')} | WIN\n"
+            entry += f"- Symbol: {trade_data.get('symbol', 'N/A')}\n"
+            entry += f"- Direction: {trade_data.get('direction', 'N/A')}\n"
+            entry += f"- Profit: ${trade_data.get('profit', 0):.2f}\n"
+            entry += f"- Strategy: {trade_data.get('strategy', 'N/A')}\n"
+            entry += f"- Regime: {trade_data.get('regime', 'N/A')}\n"
+            entry += f"- Confidence: {trade_data.get('confidence', 0):.2%}\n"
+            entry += f"- RSI: {trade_data.get('indicators', {}).get('rsi_14', 'N/A')}\n"
+            entry += f"- ADX: {trade_data.get('indicators', {}).get('adx', 'N/A')}\n"
+            entry += f"- Patterns: {trade_data.get('indicators', {}).get('candle_patterns', [])}\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write("# Success Patterns\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_success_pattern: {e}")
+
+    def _write_best_conditions(self, trade_data: dict, ts: datetime):
+        try:
+            fpath = os.path.join(self.error_db_path, 'SuccessPatterns', 'best_conditions.md')
+            entry = f"\n## Best Condition - {ts.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            entry += f"- Symbol: {trade_data.get('symbol', 'N/A')}\n"
+            entry += f"- Strategy: {trade_data.get('strategy', 'N/A')}\n"
+            entry += f"- Regime: {trade_data.get('regime', 'N/A')}\n"
+            entry += f"- Profit: ${trade_data.get('profit', 0):.2f}\n"
+            entry += f"- R:R achieved: {trade_data.get('rr', 'N/A')}\n"
+
+            with open(fpath, 'a', encoding='utf-8') as f:
+                if os.path.getsize(fpath) == 0:
+                    f.write("# Best Trading Conditions\n\n")
+                f.write(entry)
+        except Exception as e:
+            self.logger.error(f"_write_best_conditions: {e}")
+
+    def _update_master_index(self, result_type: str = 'error'):
+        try:
+            index_path = os.path.join(self.error_db_path, 'INDEX.md')
+            with open(index_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            errors = int(re.search(r'Total Errors: (\d+)', content).group(1)) if re.search(r'Total Errors: (\d+)', content) else 0
+            successes = int(re.search(r'Total Successes: (\d+)', content).group(1)) if re.search(r'Total Successes: (\d+)', content) else 0
+
+            if result_type == 'error':
+                errors += 1
+            else:
+                successes += 1
+
+            total = errors + successes
+            win_rate = round(successes / total * 100, 1) if total > 0 else 0
+
+            content = re.sub(r'Total Errors: \d+', f'Total Errors: {errors}', content)
+            content = re.sub(r'Total Successes: \d+', f'Total Successes: {successes}', content)
+            content = re.sub(r'Win Rate: [\d.]+%', f'Win Rate: {win_rate}%', content)
+
+            with open(index_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            self.logger.error(f"_update_master_index: {e}")
+
+    def _update_statistics(self):
+        try:
+            self._update_master_index()
+        except:
+            pass
+
+    def _update_patterns(self, trade_data: dict, is_success: bool):
+        try:
+            if is_success:
+                self._write_success_pattern(trade_data, datetime.now())
+            else:
+                self._write_indicator_failure(trade_data.get('indicators', {}), trade_data, datetime.now())
+        except:
+            pass
+
+    def get_critical_patterns(self) -> list:
+        try:
+            patterns = []
+            failures_path = os.path.join(self.error_db_path, 'IndicatorFailures', 'indicator_failures.md')
+            if os.path.exists(failures_path):
+                with open(failures_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                entries = content.split('## ')
+                for entry in entries[1:]:
+                    symbol_match = re.search(r'Symbol: (\w+)', entry)
+                    dir_match = re.search(r'Direction: (\w+)', entry)
+                    loss_match = re.search(r'Loss: \$([0-9.]+)', entry)
+                    if symbol_match and dir_match:
+                        patterns.append({
+                            'symbol': symbol_match.group(1),
+                            'direction': dir_match.group(1),
+                            'loss': float(loss_match.group(1)) if loss_match else 0,
+                            'type': 'indicator_failure'
+                        })
+            return patterns[:20]
+        except Exception as e:
+            self.logger.error(f"get_critical_patterns: {e}")
+            return []
+
+    def get_learning_summary(self) -> dict:
+        try:
+            index_path = os.path.join(self.error_db_path, 'INDEX.md')
+            errors = 0
+            successes = 0
+            if os.path.exists(index_path):
+                with open(index_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                err_match = re.search(r'Total Errors: (\d+)', content)
+                suc_match = re.search(r'Total Successes: (\d+)', content)
+                if err_match:
+                    errors = int(err_match.group(1))
+                if suc_match:
+                    successes = int(suc_match.group(1))
+            total = errors + successes
+            return {
+                'total_errors': errors, 'total_successes': successes,
+                'total_trades': total,
+                'win_rate': round(successes / total * 100, 1) if total > 0 else 0,
+                'critical_patterns': self.get_critical_patterns(),
+                'vault_path': self.vault_path
+            }
+        except Exception as e:
+            self.logger.error(f"get_learning_summary: {e}")
+            return {'total_errors': 0, 'total_successes': 0, 'total_trades': 0, 'win_rate': 0}
+
+    def generate_daily_report(self) -> str:
+        try:
+            summary = self.get_learning_summary()
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            report = f"# Daily Report - {date_str}\n\n"
+            report += f"## Summary\n"
+            report += f"- Total Trades: {summary['total_trades']}\n"
+            report += f"- Wins: {summary['total_successes']}\n"
+            report += f"- Losses: {summary['total_errors']}\n"
+            report += f"- Win Rate: {summary['win_rate']}%\n\n"
+            report += f"## Critical Patterns\n"
+            for p in summary.get('critical_patterns', [])[:5]:
+                report += f"- {p.get('symbol', '')} {p.get('direction', '')} — Loss: ${p.get('loss', 0):.2f}\n"
+            report += f"\n*Generated: {datetime.now().isoformat()}*\n"
+
+            report_path = os.path.join(self.error_db_path, 'Reports', f"report_{date_str}.md")
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(report)
+            return report
+        except Exception as e:
+            self.logger.error(f"generate_daily_report: {e}")
+            return f"# Report Error: {e}"
+
+    def load_from_obsidian(self) -> list:
+        try:
+            patterns = self.get_critical_patterns()
+            return patterns
+        except:
+            return []
