@@ -1568,4 +1568,375 @@ class AutoTrader:
                 rows = db.execute(
                     text(
                         "SELECT profit, strategy, symbol, direction, market_regime "
-                        "FROM trades WHERE user_id=:
+                        "FROM trades WHERE user_id=:uid AND status='closed' "
+                        "ORDER BY close_time DESC LIMIT 200"
+                    ),
+                    {"uid": self.user_id}
+                ).fetchall()
+
+                profits = [float(r[0] or 0) for r in rows]
+                wins = [p for p in profits if p > 0]
+                losses = [p for p in profits if p <= 0]
+
+                win_rate = len(wins) / max(len(profits), 1) * 100
+                avg_win = sum(wins) / max(len(wins), 1)
+                avg_loss = sum(losses) / max(len(losses), 1)
+                profit_factor = abs(sum(wins) / (sum(losses) + 1e-10))
+
+                # По стратегиям
+                strategy_stats = {}
+                for row in rows:
+                    strat = row[1] or "unknown"
+                    if strat not in strategy_stats:
+                        strategy_stats[strat] = {"trades": 0, "wins": 0, "pnl": 0.0}
+                    strategy_stats[strat]["trades"] += 1
+                    strategy_stats[strat]["pnl"] += float(row[0] or 0)
+                    if float(row[0] or 0) > 0:
+                        strategy_stats[strat]["wins"] += 1
+
+                # По символам
+                symbol_stats = {}
+                for row in rows:
+                    sym = row[2] or "unknown"
+                    if sym not in symbol_stats:
+                        symbol_stats[sym] = {"trades": 0, "wins": 0, "pnl": 0.0}
+                    symbol_stats[sym]["trades"] += 1
+                    symbol_stats[sym]["pnl"] += float(row[0] or 0)
+                    if float(row[0] or 0) > 0:
+                        symbol_stats[sym]["wins"] += 1
+
+                # Максимальная просадка
+                cumulative = 0.0
+                peak = 0.0
+                max_dd = 0.0
+                for p in reversed(profits):
+                    cumulative += p
+                    if cumulative > peak:
+                        peak = cumulative
+                    dd = peak - cumulative
+                    if dd > max_dd:
+                        max_dd = dd
+
+                return {
+                    "total_trades": len(profits),
+                    "winning_trades": len(wins),
+                    "losing_trades": len(losses),
+                    "win_rate": round(win_rate, 2),
+                    "total_pnl": round(sum(profits), 2),
+                    "avg_win": round(avg_win, 2),
+                    "avg_loss": round(avg_loss, 2),
+                    "profit_factor": round(profit_factor, 2),
+                    "max_drawdown": round(max_dd, 2),
+                    "best_trade": round(max(profits) if profits else 0, 2),
+                    "worst_trade": round(min(profits) if profits else 0, 2),
+                    "strategy_stats": strategy_stats,
+                    "symbol_stats": symbol_stats,
+                    "uptime_seconds": self.state.get("uptime_seconds", 0),
+                    "cycles_completed": self.cycle_count
+                }
+
+            except Exception as e:
+                logger.error(f"get_performance_report db error: {e}")
+                return {"total_trades": 0, "error": str(e)}
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"get_performance_report error: {e}")
+            return {"total_trades": 0, "error": str(e)}
+
+    def close_all_trades(self) -> dict:
+        """Закрыть все открытые сделки"""
+        try:
+            db = self.db_factory()
+            closed = 0
+            total_profit = 0.0
+            try:
+                from sqlalchemy import text
+                rows = db.execute(
+                    text(
+                        "SELECT id, symbol, direction, open_price, volume "
+                        "FROM trades WHERE user_id=:uid AND status='open'"
+                    ),
+                    {"uid": self.user_id}
+                ).fetchall()
+
+                for row in rows:
+                    trade_id = row[0]
+                    symbol = row[1]
+                    direction = row[2]
+                    open_price = float(row[3] or 0)
+                    volume = float(row[4] or 0.01)
+
+                    current_price = self._get_current_price(symbol)
+                    if current_price <= 0:
+                        current_price = open_price
+
+                    pip_val = volume * 10
+                    if direction == "BUY":
+                        profit = (current_price - open_price) * pip_val * 10000
+                    else:
+                        profit = (open_price - current_price) * pip_val * 10000
+
+                    db.execute(text("""
+                        UPDATE trades
+                        SET status='closed', close_price=:cp,
+                            profit=:pnl, close_time=:ct,
+                            close_reason='manual_close_all'
+                        WHERE id=:tid
+                    """), {
+                        "cp": current_price,
+                        "pnl": round(profit, 2),
+                        "ct": datetime.utcnow(),
+                        "tid": trade_id
+                    })
+                    closed += 1
+                    total_profit += profit
+
+                db.commit()
+                self.total_pnl += total_profit
+                logger.info(f"Закрыто {closed} сделок, P&L={total_profit:.2f}")
+                return {
+                    "closed": closed,
+                    "total_profit": round(total_profit, 2),
+                    "success": True
+                }
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"close_all_trades db error: {e}")
+                return {"closed": 0, "error": str(e), "success": False}
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"close_all_trades error: {e}")
+            return {"closed": 0, "error": str(e), "success": False}
+
+
+# ============================================================
+# ФАБРИКА АВТОТРЕЙДЕРОВ
+# ============================================================
+
+class AutoTraderManager:
+    """Менеджер для управления несколькими AutoTrader (по user_id)"""
+
+    def __init__(self, db_factory, brain_factory=None):
+        self.db_factory = db_factory
+        self.brain_factory = brain_factory
+        self._traders: Dict[int, AutoTrader] = {}
+        self._lock = threading.Lock()
+
+    def get_or_create(self, user_id: int) -> AutoTrader:
+        """Получить или создать трейдер для пользователя"""
+        with self._lock:
+            if user_id not in self._traders:
+                brain = None
+                if self.brain_factory:
+                    try:
+                        brain = self.brain_factory(user_id)
+                    except Exception as e:
+                        logger.error(f"brain_factory error for user {user_id}: {e}")
+                self._traders[user_id] = AutoTrader(
+                    user_id=user_id,
+                    db_factory=self.db_factory,
+                    brain=brain
+                )
+            return self._traders[user_id]
+
+    def get(self, user_id: int) -> Optional[AutoTrader]:
+        """Получить трейдер"""
+        return self._traders.get(user_id)
+
+    def remove(self, user_id: int):
+        """Удалить трейдер"""
+        with self._lock:
+            trader = self._traders.pop(user_id, None)
+            if trader and trader.is_running():
+                trader.stop()
+
+    def stop_all(self):
+        """Остановить все трейдеры"""
+        with self._lock:
+            for trader in self._traders.values():
+                try:
+                    trader.stop()
+                except Exception as e:
+                    logger.error(f"stop_all error: {e}")
+
+    def get_all_status(self) -> dict:
+        """Статус всех трейдеров"""
+        result = {}
+        with self._lock:
+            for uid, trader in self._traders.items():
+                try:
+                    result[uid] = {
+                        "running": trader.is_running(),
+                        "trades_opened": trader.trades_opened,
+                        "total_pnl": round(trader.total_pnl, 2),
+                        "cycle_count": trader.cycle_count
+                    }
+                except Exception:
+                    result[uid] = {"running": False}
+        return result
+
+
+# ============================================================
+# УТИЛИТЫ
+# ============================================================
+
+def calculate_sharpe_ratio(returns: list, risk_free_rate: float = 0.02) -> float:
+    """Расчёт коэффициента Шарпа"""
+    try:
+        if not returns or not NUMPY_OK:
+            return 0.0
+        arr = np.array(returns, dtype=float)
+        if len(arr) < 2:
+            return 0.0
+        excess = arr - risk_free_rate / 252
+        std = float(np.std(excess))
+        if std < 1e-10:
+            return 0.0
+        sharpe = float(np.mean(excess) / std * math.sqrt(252))
+        return round(sharpe, 4)
+    except Exception as e:
+        logger.error(f"calculate_sharpe_ratio error: {e}")
+        return 0.0
+
+
+def calculate_sortino_ratio(returns: list, risk_free_rate: float = 0.02) -> float:
+    """Расчёт коэффициента Сортино"""
+    try:
+        if not returns or not NUMPY_OK:
+            return 0.0
+        arr = np.array(returns, dtype=float)
+        excess = arr - risk_free_rate / 252
+        downside = excess[excess < 0]
+        if len(downside) < 1:
+            return 0.0
+        downside_std = float(np.std(downside))
+        if downside_std < 1e-10:
+            return 0.0
+        sortino = float(np.mean(excess) / downside_std * math.sqrt(252))
+        return round(sortino, 4)
+    except Exception as e:
+        logger.error(f"calculate_sortino_ratio error: {e}")
+        return 0.0
+
+
+def calculate_max_drawdown(equity_curve: list) -> dict:
+    """Расчёт максимальной просадки"""
+    try:
+        if not equity_curve or not NUMPY_OK:
+            return {"max_dd": 0.0, "max_dd_pct": 0.0}
+        arr = np.array(equity_curve, dtype=float)
+        peak = np.maximum.accumulate(arr)
+        drawdown = peak - arr
+        max_dd = float(np.max(drawdown))
+        peak_val = float(np.max(peak))
+        max_dd_pct = (max_dd / peak_val * 100) if peak_val > 0 else 0.0
+        return {
+            "max_dd": round(max_dd, 2),
+            "max_dd_pct": round(max_dd_pct, 2)
+        }
+    except Exception as e:
+        logger.error(f"calculate_max_drawdown error: {e}")
+        return {"max_dd": 0.0, "max_dd_pct": 0.0}
+
+
+def calculate_profit_factor(trades: list) -> float:
+    """Расчёт Profit Factor"""
+    try:
+        wins = sum(t for t in trades if t > 0)
+        losses = abs(sum(t for t in trades if t < 0))
+        if losses < 1e-10:
+            return wins if wins > 0 else 0.0
+        return round(wins / losses, 4)
+    except Exception as e:
+        logger.error(f"calculate_profit_factor error: {e}")
+        return 0.0
+
+
+def format_signal_for_display(signal: dict) -> dict:
+    """Форматирование сигнала для отображения"""
+    try:
+        direction = signal.get("direction", "WAIT")
+        confidence = float(signal.get("confidence", 0))
+        emoji = "📈" if direction == "BUY" else ("📉" if direction == "SELL" else "⏸️")
+        conf_pct = round(confidence * 100, 1)
+        strength = "СИЛЬНЫЙ" if confidence > 0.8 else ("СРЕДНИЙ" if confidence > 0.65 else "СЛАБЫЙ")
+
+        return {
+            **signal,
+            "emoji": emoji,
+            "confidence_pct": conf_pct,
+            "strength": strength,
+            "display_direction": {
+                "BUY": "ПОКУПКА",
+                "SELL": "ПРОДАЖА",
+                "WAIT": "ОЖИДАНИЕ"
+            }.get(direction, direction)
+        }
+    except Exception as e:
+        logger.error(f"format_signal_for_display error: {e}")
+        return signal
+
+
+# ============================================================
+# ТОЧКА ВХОДА (для тестирования)
+# ============================================================
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+    )
+
+    print("=" * 60)
+    print("GM TRADER — ТЕСТ КОМПОНЕНТОВ")
+    print("=" * 60)
+
+    # Тест RiskManager
+    rm = RiskManager()
+    lot = rm.calculate_lot(
+        balance=10000,
+        win_rate=0.6,
+        avg_win=20,
+        avg_loss=10,
+        sl_distance=0.002,
+        price=1.085
+    )
+    print(f"✅ RiskManager: lot={lot}")
+
+    # Тест ModelDriftMonitor
+    dm = ModelDriftMonitor()
+    dm.set_baseline(0.6, 15.0)
+    drift = dm.check_drift(0.45, 5.0)
+    print(f"✅ DriftMonitor: drift={drift['drift']}, psi={drift['psi']}")
+
+    # Тест AITester
+    at = AITester()
+    at.initialize({"rsi": 1.0, "macd": 1.2, "ema": 0.8})
+    signal = at.compare({"direction": "BUY", "confidence": 0.7})
+    print(f"✅ AITester: version={signal.get('ab_version')}")
+
+    # Тест RegimeMemory
+    rm2 = RegimeMemory()
+    rm2.remember("STRONG_TREND", "longterm", 25.0)
+    rm2.remember("STRONG_TREND", "longterm", 15.0)
+    rm2.remember("STRONG_TREND", "scalping", -5.0)
+    rec = rm2.recommend("STRONG_TREND")
+    print(f"✅ RegimeMemory: best={rec['strategy']}")
+
+    # Тест утилит
+    returns = [0.01, -0.005, 0.02, -0.01, 0.015, 0.008]
+    sharpe = calculate_sharpe_ratio(returns)
+    print(f"✅ Sharpe: {sharpe}")
+
+    pf = calculate_profit_factor([20, -10, 15, -8, 25, -12])
+    print(f"✅ Profit Factor: {pf}")
+
+    print("=" * 60)
+    print("✅ ВСЕ ТЕСТЫ ПРОЙДЕНЫ!")
+    print("=" * 60)
+о
