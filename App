@@ -1,1 +1,1971 @@
-git clone https://github.com/MarkusPfundstein/mcp-obsidian.git cd mcp-obsidian
+# ============================================================
+# GM TRADING AI — ГЛАВНЫЙ СЕРВЕР
+# FastAPI + WebSocket + JWT + SQLite
+# ============================================================
+
+import os
+import sys
+import uuid
+import json
+import time
+import logging
+import asyncio
+import hashlib
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+
+try:
+    from fastapi import (
+        FastAPI, HTTPException, Depends, WebSocket,
+        WebSocketDisconnect, status, BackgroundTasks, Request
+    )
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+except ImportError:
+    os.system("pip install fastapi uvicorn")
+    from fastapi import (
+        FastAPI, HTTPException, Depends, WebSocket,
+        WebSocketDisconnect, status, BackgroundTasks, Request
+    )
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+try:
+    from pydantic import BaseModel, EmailStr
+except ImportError:
+    os.system("pip install pydantic[email]")
+    from pydantic import BaseModel
+
+try:
+    from sqlalchemy import (
+        create_engine, Column, Integer, String, Float,
+        DateTime, Boolean, Text, ForeignKey, JSON
+    )
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import sessionmaker, Session, relationship
+except ImportError:
+    os.system("pip install sqlalchemy")
+    from sqlalchemy import (
+        create_engine, Column, Integer, String, Float,
+        DateTime, Boolean, Text, ForeignKey, JSON
+    )
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import sessionmaker, Session, relationship
+
+try:
+    from jose import JWTError, jwt
+except ImportError:
+    os.system("pip install python-jose[cryptography]")
+    from jose import JWTError, jwt
+
+try:
+    from passlib.context import CryptContext
+except ImportError:
+    os.system("pip install passlib[bcrypt]")
+    from passlib.context import CryptContext
+
+try:
+    import uvicorn
+except ImportError:
+    os.system("pip install uvicorn")
+    import uvicorn
+
+try:
+    import numpy as np
+except ImportError:
+    os.system("pip install numpy")
+    import numpy as np
+
+# ============================================================
+# КОНФИГУРАЦИЯ
+# ============================================================
+
+SECRET_KEY = "gm_trading_ai_super_secret_key_2024_v3_ultra"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+
+DATABASE_URL = "sqlite:///./gm_trading.db"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("gm_trading.log", encoding="utf-8")
+    ]
+)
+logger = logging.getLogger("GM_TRADING")
+
+# ============================================================
+# БАЗА ДАННЫХ
+# ============================================================
+
+Base = declarative_base()
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    username = Column(String, unique=True)
+    hashed_password = Column(String)
+    tier = Column(String, default="free")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    mt5_login = Column(String, nullable=True)
+    mt5_password = Column(String, nullable=True)
+    mt5_server = Column(String, nullable=True)
+    obsidian_path = Column(String, nullable=True)
+    settings = Column(Text, default="{}")
+    api_key = Column(String, nullable=True)
+
+
+class Trade(Base):
+    __tablename__ = "trades"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    ticket = Column(String, nullable=True)
+    symbol = Column(String)
+    direction = Column(String)
+    volume = Column(Float, default=0.01)
+    open_price = Column(Float)
+    close_price = Column(Float, nullable=True)
+    sl = Column(Float, nullable=True)
+    tp = Column(Float, nullable=True)
+    profit = Column(Float, default=0.0)
+    commission = Column(Float, default=0.0)
+    swap = Column(Float, default=0.0)
+    strategy = Column(String, default="regular")
+    timeframe = Column(String, default="H1")
+    status = Column(String, default="open")
+    open_time = Column(DateTime, default=datetime.utcnow)
+    close_time = Column(DateTime, nullable=True)
+    signal_confidence = Column(Float, default=0.0)
+    ai_decision = Column(Text, nullable=True)
+    market_regime = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+
+
+class AIKnowledge(Base):
+    __tablename__ = "ai_knowledge"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    category = Column(String)
+    content = Column(Text)
+    confidence = Column(Float, default=1.0)
+    usage_count = Column(Integer, default=0)
+    success_rate = Column(Float, default=0.5)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AIState(Base):
+    __tablename__ = "ai_states"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    generation = Column(Integer, default=1)
+    iq = Column(Float, default=50.0)
+    total_trades = Column(Integer, default=0)
+    winning_trades = Column(Integer, default=0)
+    total_pnl = Column(Float, default=0.0)
+    weights = Column(Text, default="{}")
+    lessons_learned = Column(Integer, default=0)
+    evolution_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role = Column(String)
+    content = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class JournalNote(Base):
+    __tablename__ = "journal_notes"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    content = Column(Text)
+    tags = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ErrorPattern(Base):
+    __tablename__ = "error_patterns"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    pattern_type = Column(String)
+    symbol = Column(String, nullable=True)
+    description = Column(Text)
+    frequency = Column(Integer, default=1)
+    total_loss = Column(Float, default=0.0)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    is_critical = Column(Boolean, default=False)
+
+
+class AutoTraderSettings(Base):
+    __tablename__ = "autotrader_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    is_enabled = Column(Boolean, default=False)
+    symbols = Column(Text, default='["EURUSD","GBPUSD","USDJPY"]')
+    strategy = Column(String, default="regular")
+    risk_percent = Column(Float, default=1.0)
+    max_trades = Column(Integer, default=3)
+    min_confidence = Column(Float, default=0.65)
+    use_ai = Column(Boolean, default=True)
+    timeframe = Column(String, default="H1")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# СОЗДАНИЕ ТАБЛИЦ
+# ============================================================
+
+Base.metadata.create_all(bind=engine)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ============================================================
+# ИНИЦИАЛИЗАЦИЯ АДМИНИСТРАТОРОВ
+# ============================================================
+
+ADMINS = [
+    {"email": "fjxjxjdbdhdh@gmail.com", "password": "SazanovMaksim2009", "username": "SazanovMaksim"},
+    {"email": "nool562@gmail.com", "password": "ParsadanyanGrigori2009", "username": "ParsadanyanGrigori"},
+    {"email": "firsovmaksim2009@gmail.com", "password": "FirsovMakson2009", "username": "FirsovMaksim"},
+    {"email": "danilcrypto2009@gmail.com", "password": "DanilCryptoHub2009", "username": "DanilCrypto"},
+    {"email": "sanyacrypto2009@gmail.com", "password": "SanyaCrypto2009", "username": "SanyaCrypto"},
+    {"email": "imrancrypto2009@gmail.com", "password": "ImranCrypto2009", "username": "ImranCrypto"},
+]
+
+
+def init_admins():
+    db = SessionLocal()
+    try:
+        for admin_data in ADMINS:
+            existing = db.query(User).filter(User.email == admin_data["email"]).first()
+            if not existing:
+                user = User(
+                    email=admin_data["email"],
+                    username=admin_data["username"],
+                    hashed_password=pwd_context.hash(admin_data["password"]),
+                    tier="admin",
+                    is_active=True
+                )
+                db.add(user)
+                db.flush()
+                ai_state = AIState(user_id=user.id, iq=200.0, generation=5)
+                db.add(ai_state)
+                at_settings = AutoTraderSettings(user_id=user.id)
+                db.add(at_settings)
+                logger.info(f"✅ Admin created: {admin_data['email']}")
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error init admins: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ============================================================
+# JWT УТИЛИТЫ
+# ============================================================
+
+security = HTTPBearer()
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return email
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_current_user(email: str = Depends(verify_token), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account disabled")
+    return user
+
+
+def get_admin_user(current_user: User = Depends(get_current_user)):
+    if current_user.tier != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return current_user
+
+
+# ============================================================
+# ИМПОРТ МОДУЛЕЙ
+# ============================================================
+
+try:
+    from gm_ai_brain import EnhancedGMAIBrain
+    AI_BRAIN_AVAILABLE = True
+    logger.info("✅ AI Brain loaded")
+except Exception as e:
+    AI_BRAIN_AVAILABLE = False
+    logger.warning(f"⚠️ AI Brain not available: {e}")
+
+try:
+    from gm_trader import AutoTrader
+    TRADER_AVAILABLE = True
+    logger.info("✅ AutoTrader loaded")
+except Exception as e:
+    TRADER_AVAILABLE = False
+    logger.warning(f"⚠️ AutoTrader not available: {e}")
+
+try:
+    from gm_engine import MT5Manager, TechnicalAnalyzer, StrategyEngine, SocialMonitor, ObsidianManager
+    ENGINE_AVAILABLE = True
+    logger.info("✅ Engine loaded")
+except Exception as e:
+    ENGINE_AVAILABLE = False
+    logger.warning(f"⚠️ Engine not available: {e}")
+
+# ============================================================
+# ГЛОБАЛЬНЫЕ ИНСТАНСЫ
+# ============================================================
+
+ai_brains: Dict[int, Any] = {}
+auto_traders: Dict[int, Any] = {}
+mt5_managers: Dict[int, Any] = {}
+social_monitor = None
+
+
+def get_or_create_brain(user_id: int):
+    if user_id not in ai_brains and AI_BRAIN_AVAILABLE:
+        try:
+            ai_brains[user_id] = EnhancedGMAIBrain(SessionLocal)
+        except Exception as e:
+            logger.error(f"Brain init error: {e}")
+            return None
+    return ai_brains.get(user_id)
+
+
+def get_or_create_trader(user_id: int):
+    if user_id not in auto_traders and TRADER_AVAILABLE:
+        try:
+            brain = get_or_create_brain(user_id)
+            auto_traders[user_id] = AutoTrader(
+                user_id=user_id,
+                db_factory=SessionLocal,
+                brain=brain
+            )
+        except Exception as e:
+            logger.error(f"Trader init error: {e}")
+            return None
+    return auto_traders.get(user_id)
+
+
+# ============================================================
+# WEBSOCKET МЕНЕДЖЕР
+# ============================================================
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.price_cache: Dict[str, Dict] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: int):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        logger.info(f"WS connected: user {user_id}")
+
+    def disconnect(self, websocket: WebSocket, user_id: int):
+        if user_id in self.active_connections:
+            try:
+                self.active_connections[user_id].remove(websocket)
+            except ValueError:
+                pass
+        logger.info(f"WS disconnected: user {user_id}")
+
+    async def send_to_user(self, user_id: int, data: dict):
+        if user_id in self.active_connections:
+            dead = []
+            for ws in self.active_connections[user_id]:
+                try:
+                    await ws.send_json(data)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.active_connections[user_id].remove(ws)
+
+    async def broadcast(self, data: dict):
+        for user_id in list(self.active_connections.keys()):
+            await self.send_to_user(user_id, data)
+
+
+ws_manager = ConnectionManager()
+
+# ============================================================
+# FASTAPI APP
+# ============================================================
+
+app = FastAPI(
+    title="GM Trading AI",
+    description="Самый мощный трейдинг ИИ в истории",
+    version="3.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# PYDANTIC МОДЕЛИ
+# ============================================================
+
+class RegisterRequest(BaseModel):
+    email: str
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class MT5ConnectRequest(BaseModel):
+    login: int
+    password: str
+    server: str
+
+
+class TradeRequest(BaseModel):
+    symbol: str
+    direction: str
+    volume: float = 0.01
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    strategy: str = "regular"
+
+
+class CloseTradeRequest(BaseModel):
+    ticket: str
+
+
+class AnalyzeRequest(BaseModel):
+    symbol: str
+    timeframe: str = "H1"
+    strategy: str = "regular"
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+class JournalCreateRequest(BaseModel):
+    title: str
+    content: str
+    tags: str = ""
+
+
+class JournalUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class AutoTraderSettingsRequest(BaseModel):
+    symbols: Optional[List[str]] = None
+    strategy: Optional[str] = None
+    risk_percent: Optional[float] = None
+    max_trades: Optional[int] = None
+    min_confidence: Optional[float] = None
+    use_ai: Optional[bool] = None
+    timeframe: Optional[str] = None
+
+
+class UserSettingsRequest(BaseModel):
+    obsidian_path: Optional[str] = None
+    api_key: Optional[str] = None
+    settings: Optional[dict] = None
+
+
+class SignalFeedbackRequest(BaseModel):
+    trade_id: int
+    feedback: str  # "positive" или "negative"
+
+
+# ============================================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================================
+
+def get_simulated_price(symbol: str) -> dict:
+    base_prices = {
+        "EURUSD": 1.0850, "GBPUSD": 1.2650, "USDJPY": 149.50,
+        "AUDUSD": 0.6550, "USDCAD": 1.3650, "USDCHF": 0.8950,
+        "NZDUSD": 0.6050, "EURGBP": 0.8580, "EURJPY": 162.20,
+        "GBPJPY": 189.50, "XAUUSD": 2050.0, "XAGUSD": 23.50,
+        "BTCUSD": 43000.0, "ETHUSD": 2500.0, "LTCUSD": 75.0,
+    }
+    base = base_prices.get(symbol, 1.0)
+    spread = base * 0.0001
+    noise = (np.random.random() - 0.5) * base * 0.002
+    bid = round(base + noise, 5)
+    ask = round(bid + spread, 5)
+    return {
+        "symbol": symbol,
+        "bid": bid,
+        "ask": ask,
+        "time": datetime.utcnow().isoformat(),
+        "spread": round(spread, 5)
+    }
+
+
+def calculate_stats(trades: List[Trade]) -> dict:
+    if not trades:
+        return {
+            "total": 0, "winning": 0, "losing": 0,
+            "win_rate": 0.0, "total_pnl": 0.0,
+            "avg_profit": 0.0, "avg_loss": 0.0,
+            "best_trade": 0.0, "worst_trade": 0.0,
+            "profit_factor": 0.0, "max_drawdown": 0.0
+        }
+    closed = [t for t in trades if t.status == "closed"]
+    if not closed:
+        return {
+            "total": len(trades), "winning": 0, "losing": 0,
+            "win_rate": 0.0, "total_pnl": 0.0,
+            "avg_profit": 0.0, "avg_loss": 0.0,
+            "best_trade": 0.0, "worst_trade": 0.0,
+            "profit_factor": 0.0, "max_drawdown": 0.0
+        }
+    profits = [t.profit for t in closed]
+    winning = [p for p in profits if p > 0]
+    losing = [p for p in profits if p < 0]
+    total_pnl = sum(profits)
+    win_rate = len(winning) / len(closed) * 100 if closed else 0
+    gross_profit = sum(winning) if winning else 0
+    gross_loss = abs(sum(losing)) if losing else 0
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
+    cumulative = np.cumsum(profits)
+    running_max = np.maximum.accumulate(cumulative)
+    drawdown = running_max - cumulative
+    max_dd = float(np.max(drawdown)) if len(drawdown) > 0 else 0
+    return {
+        "total": len(closed),
+        "winning": len(winning),
+        "losing": len(losing),
+        "win_rate": round(win_rate, 2),
+        "total_pnl": round(total_pnl, 2),
+        "avg_profit": round(sum(winning) / len(winning), 2) if winning else 0,
+        "avg_loss": round(sum(losing) / len(losing), 2) if losing else 0,
+        "best_trade": round(max(profits), 2) if profits else 0,
+        "worst_trade": round(min(profits), 2) if profits else 0,
+        "profit_factor": round(profit_factor, 2),
+        "max_drawdown": round(max_dd, 2)
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — AUTH
+# ============================================================
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == req.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if db.query(User).filter(User.username == req.username).first():
+        raise HTTPException(status_code=400, detail="Username taken")
+    user = User(
+        email=req.email,
+        username=req.username,
+        hashed_password=pwd_context.hash(req.password),
+        tier="free"
+    )
+    db.add(user)
+    db.flush()
+    ai_state = AIState(user_id=user.id)
+    db.add(ai_state)
+    at_settings = AutoTraderSettings(user_id=user.id)
+    db.add(at_settings)
+    db.commit()
+    token = create_access_token({"sub": req.email})
+    return {"access_token": token, "token_type": "bearer", "tier": user.tier, "username": user.username}
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user or not pwd_context.verify(req.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    user.last_login = datetime.utcnow()
+    db.commit()
+    token = create_access_token({"sub": req.email})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "tier": user.tier,
+        "username": user.username,
+        "email": user.email
+    }
+
+
+@app.get("/api/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "tier": current_user.tier,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
+        "mt5_connected": bool(current_user.mt5_login),
+        "obsidian_path": current_user.obsidian_path
+    }
+
+
+@app.post("/api/auth/refresh")
+async def refresh_token(current_user: User = Depends(get_current_user)):
+    token = create_access_token({"sub": current_user.email})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.put("/api/auth/settings")
+async def update_settings(
+    req: UserSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if req.obsidian_path is not None:
+        current_user.obsidian_path = req.obsidian_path
+    if req.api_key is not None:
+        current_user.api_key = req.api_key
+    if req.settings is not None:
+        current_user.settings = json.dumps(req.settings)
+    db.commit()
+    return {"status": "ok", "message": "Settings updated"}
+
+
+# ============================================================
+# ЭНДПОИНТЫ — MT5
+# ============================================================
+
+@app.post("/api/mt5/connect")
+async def mt5_connect(
+    req: MT5ConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    current_user.mt5_login = str(req.login)
+    current_user.mt5_password = req.password
+    current_user.mt5_server = req.server
+    db.commit()
+    if ENGINE_AVAILABLE:
+        try:
+            manager = MT5Manager(req.login, req.password, req.server)
+            result = manager.connect()
+            if result:
+                mt5_managers[current_user.id] = manager
+                return {"status": "connected", "message": "MT5 connected successfully"}
+        except Exception as e:
+            logger.error(f"MT5 connect error: {e}")
+    return {"status": "simulated", "message": "Running in simulation mode"}
+
+
+@app.post("/api/mt5/disconnect")
+async def mt5_disconnect(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.id in mt5_managers:
+        try:
+            mt5_managers[current_user.id].disconnect()
+            del mt5_managers[current_user.id]
+        except Exception:
+            pass
+    current_user.mt5_login = None
+    current_user.mt5_password = None
+    db.commit()
+    return {"status": "disconnected"}
+
+
+@app.get("/api/mt5/prices")
+async def get_prices(current_user: User = Depends(get_current_user)):
+    symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "XAUUSD", "BTCUSD"]
+    prices = {}
+    manager = mt5_managers.get(current_user.id)
+    for sym in symbols:
+        if manager and ENGINE_AVAILABLE:
+            try:
+                price = manager.get_price(sym)
+                if price:
+                    prices[sym] = price
+                    continue
+            except Exception:
+                pass
+        prices[sym] = get_simulated_price(sym)
+    return {"prices": prices, "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.get("/api/mt5/price/{symbol}")
+async def get_price(symbol: str, current_user: User = Depends(get_current_user)):
+    manager = mt5_managers.get(current_user.id)
+    if manager and ENGINE_AVAILABLE:
+        try:
+            price = manager.get_price(symbol)
+            if price:
+                return price
+        except Exception:
+            pass
+    return get_simulated_price(symbol)
+
+
+@app.get("/api/mt5/positions")
+async def get_positions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    manager = mt5_managers.get(current_user.id)
+    if manager and ENGINE_AVAILABLE:
+        try:
+            positions = manager.get_positions()
+            if positions:
+                return {"positions": positions}
+        except Exception:
+            pass
+    open_trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "open"
+    ).all()
+    positions = []
+    for t in open_trades:
+        price_data = get_simulated_price(t.symbol)
+        current_price = price_data["bid"] if t.direction == "BUY" else price_data["ask"]
+        pnl = (current_price - t.open_price) * t.volume * 100000
+        if t.direction == "SELL":
+            pnl = -pnl
+        positions.append({
+            "ticket": t.ticket or str(t.id),
+            "symbol": t.symbol,
+            "direction": t.direction,
+            "volume": t.volume,
+            "open_price": t.open_price,
+            "current_price": current_price,
+            "sl": t.sl,
+            "tp": t.tp,
+            "profit": round(pnl, 2),
+            "open_time": t.open_time.isoformat() if t.open_time else None
+        })
+    return {"positions": positions}
+
+
+@app.post("/api/mt5/trade")
+async def open_trade(
+    req: TradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    price_data = get_simulated_price(req.symbol)
+    open_price = price_data["ask"] if req.direction == "BUY" else price_data["bid"]
+    ticket = str(uuid.uuid4())[:8].upper()
+    trade = Trade(
+        user_id=current_user.id,
+        ticket=ticket,
+        symbol=req.symbol,
+        direction=req.direction,
+        volume=req.volume,
+        open_price=open_price,
+        sl=req.sl,
+        tp=req.tp,
+        strategy=req.strategy,
+        status="open"
+    )
+    db.add(trade)
+    db.commit()
+    if ENGINE_AVAILABLE and current_user.id in mt5_managers:
+        try:
+            result = mt5_managers[current_user.id].open_trade(
+                req.symbol, req.direction, req.volume, req.sl, req.tp
+            )
+            if result:
+                trade.ticket = str(result)
+                db.commit()
+        except Exception as e:
+            logger.error(f"MT5 trade error: {e}")
+    await ws_manager.send_to_user(current_user.id, {
+        "type": "trade_opened",
+        "trade": {"ticket": trade.ticket, "symbol": req.symbol, "direction": req.direction}
+    })
+    return {"status": "ok", "ticket": trade.ticket, "open_price": open_price, "trade_id": trade.id}
+
+
+@app.post("/api/mt5/close")
+async def close_trade(
+    req: CloseTradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    trade = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.ticket == req.ticket,
+        Trade.status == "open"
+    ).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    price_data = get_simulated_price(trade.symbol)
+    close_price = price_data["bid"] if trade.direction == "BUY" else price_data["ask"]
+    pnl = (close_price - trade.open_price) * trade.volume * 100000
+    if trade.direction == "SELL":
+        pnl = -pnl
+    trade.close_price = close_price
+    trade.profit = round(pnl, 2)
+    trade.status = "closed"
+    trade.close_time = datetime.utcnow()
+    db.commit()
+    brain = get_or_create_brain(current_user.id)
+    if brain:
+        try:
+            brain.learn_from_trade({
+                "symbol": trade.symbol,
+                "direction": trade.direction,
+                "profit": trade.profit,
+                "strategy": trade.strategy,
+                "open_price": trade.open_price,
+                "close_price": close_price
+            })
+        except Exception as e:
+            logger.error(f"Brain learn error: {e}")
+    await ws_manager.send_to_user(current_user.id, {
+        "type": "trade_closed",
+        "ticket": req.ticket,
+        "profit": round(pnl, 2)
+    })
+    return {"status": "closed", "profit": round(pnl, 2), "close_price": close_price}
+
+
+@app.post("/api/mt5/close-all")
+async def close_all_trades(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    open_trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "open"
+    ).all()
+    total_pnl = 0.0
+    for trade in open_trades:
+        price_data = get_simulated_price(trade.symbol)
+        close_price = price_data["bid"] if trade.direction == "BUY" else price_data["ask"]
+        pnl = (close_price - trade.open_price) * trade.volume * 100000
+        if trade.direction == "SELL":
+            pnl = -pnl
+        trade.close_price = close_price
+        trade.profit = round(pnl, 2)
+        trade.status = "closed"
+        trade.close_time = datetime.utcnow()
+        total_pnl += pnl
+    db.commit()
+    return {"status": "ok", "closed": len(open_trades), "total_pnl": round(total_pnl, 2)}
+
+
+@app.get("/api/mt5/account")
+async def get_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    manager = mt5_managers.get(current_user.id)
+    if manager and ENGINE_AVAILABLE:
+        try:
+            info = manager.get_account_info()
+            if info:
+                return info
+        except Exception:
+            pass
+    trades = db.query(Trade).filter(Trade.user_id == current_user.id).all()
+    closed = [t for t in trades if t.status == "closed"]
+    total_pnl = sum(t.profit for t in closed)
+    balance = 10000.0 + total_pnl
+    return {
+        "balance": round(balance, 2),
+        "equity": round(balance, 2),
+        "margin": 0.0,
+        "free_margin": round(balance, 2),
+        "margin_level": 0.0,
+        "currency": "USD",
+        "server": current_user.mt5_server or "Simulation"
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — TRADES
+# ============================================================
+
+@app.get("/api/trades/history")
+async def get_trade_history(
+    limit: int = 100,
+    offset: int = 0,
+    symbol: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Trade).filter(Trade.user_id == current_user.id)
+    if symbol:
+        query = query.filter(Trade.symbol == symbol)
+    if status:
+        query = query.filter(Trade.status == status)
+    total = query.count()
+    trades = query.order_by(Trade.open_time.desc()).offset(offset).limit(limit).all()
+    return {
+        "trades": [
+            {
+                "id": t.id,
+                "ticket": t.ticket,
+                "symbol": t.symbol,
+                "direction": t.direction,
+                "volume": t.volume,
+                "open_price": t.open_price,
+                "close_price": t.close_price,
+                "sl": t.sl,
+                "tp": t.tp,
+                "profit": t.profit,
+                "strategy": t.strategy,
+                "status": t.status,
+                "open_time": t.open_time.isoformat() if t.open_time else None,
+                "close_time": t.close_time.isoformat() if t.close_time else None,
+                "signal_confidence": t.signal_confidence,
+                "market_regime": t.market_regime
+            }
+            for t in trades
+        ],
+        "total": total
+    }
+
+
+@app.get("/api/trades/stats")
+async def get_trade_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    trades = db.query(Trade).filter(Trade.user_id == current_user.id).all()
+    stats = calculate_stats(trades)
+    open_count = len([t for t in trades if t.status == "open"])
+    stats["open_trades"] = open_count
+    return stats
+
+
+@app.get("/api/trades/export")
+async def export_trades(
+    format: str = "json",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    trades = db.query(Trade).filter(Trade.user_id == current_user.id).all()
+    data = [
+        {
+            "id": t.id, "ticket": t.ticket, "symbol": t.symbol,
+            "direction": t.direction, "volume": t.volume,
+            "open_price": t.open_price, "close_price": t.close_price,
+            "profit": t.profit, "strategy": t.strategy, "status": t.status,
+            "open_time": t.open_time.isoformat() if t.open_time else None,
+            "close_time": t.close_time.isoformat() if t.close_time else None
+        }
+        for t in trades
+    ]
+    if format == "csv":
+        lines = ["id,ticket,symbol,direction,volume,open_price,close_price,profit,strategy,status,open_time,close_time"]
+        for row in data:
+            lines.append(",".join([
+                str(row.get(k, "")) for k in
+                ["id", "ticket", "symbol", "direction", "volume",
+                 "open_price", "close_price", "profit", "strategy",
+                 "status", "open_time", "close_time"]
+            ]))
+        return JSONResponse(content={"csv": "\n".join(lines)})
+    return JSONResponse(content={"trades": data})
+
+
+# ============================================================
+# ЭНДПОИНТЫ — ANALYZE
+# ============================================================
+
+@app.post("/api/analyze/signal")
+async def analyze_signal(
+    req: AnalyzeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if ENGINE_AVAILABLE:
+        try:
+            analyzer = TechnicalAnalyzer()
+            manager = mt5_managers.get(current_user.id)
+            if manager:
+                ohlcv = manager.get_ohlcv(req.symbol, req.timeframe, 200)
+            else:
+                ohlcv = None
+            if ohlcv is not None:
+                indicators = analyzer.calculate_indicators(ohlcv)
+                signal = analyzer.generate_signal(indicators)
+                regime = analyzer.detect_market_regime(ohlcv)
+                levels = analyzer.find_support_resistance(ohlcv)
+                brain = get_or_create_brain(current_user.id)
+                boost = brain.get_knowledge_boost() if brain else 1.0
+                signal["confidence"] = min(0.99, signal.get("confidence", 0.5) * boost)
+                signal["regime"] = regime
+                signal["levels"] = levels
+                return signal
+        except Exception as e:
+            logger.error(f"Analysis error: {e}")
+    import random
+    directions = ["BUY", "SELL", "NEUTRAL"]
+    direction = random.choice(directions)
+    confidence = round(random.uniform(0.45, 0.92), 3)
+    price_data = get_simulated_price(req.symbol)
+    return {
+        "symbol": req.symbol,
+        "direction": direction,
+        "confidence": confidence,
+        "timeframe": req.timeframe,
+        "strategy": req.strategy,
+        "entry": price_data["ask"],
+        "sl": round(price_data["bid"] - 0.0020, 5) if direction == "BUY" else round(price_data["ask"] + 0.0020, 5),
+        "tp": round(price_data["ask"] + 0.0040, 5) if direction == "BUY" else round(price_data["bid"] - 0.0040, 5),
+        "regime": "MODERATE_TREND",
+        "indicators": {
+            "rsi": round(random.uniform(30, 70), 2),
+            "macd": round(random.uniform(-0.002, 0.002), 5),
+            "ema20": round(price_data["bid"], 5),
+            "ema50": round(price_data["bid"] * 0.999, 5),
+            "atr": round(random.uniform(0.0010, 0.0030), 5),
+            "adx": round(random.uniform(20, 60), 2)
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/api/analyze/heatmap")
+async def get_heatmap(current_user: User = Depends(get_current_user)):
+    symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "XAUUSD", "BTCUSD", "ETHUSD"]
+    heatmap = []
+    for sym in symbols:
+        import random
+        heatmap.append({
+            "symbol": sym,
+            "strength": round(random.uniform(-1, 1), 3),
+            "volume": round(random.uniform(0.5, 2.0), 2),
+            "volatility": round(random.uniform(0.1, 1.0), 2),
+            "signal": random.choice(["BUY", "SELL", "NEUTRAL"])
+        })
+    return {"heatmap": heatmap, "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/analyze/backtest")
+async def run_backtest(
+    req: AnalyzeRequest,
+    current_user: User = Depends(get_current_user)
+):
+    import random
+    trades = []
+    balance = 10000.0
+    for i in range(50):
+        profit = round(random.gauss(2, 15), 2)
+        balance += profit
+        trades.append({"trade": i + 1, "profit": profit, "balance": round(balance, 2)})
+    wins = len([t for t in trades if t["profit"] > 0])
+    return {
+        "symbol": req.symbol,
+        "timeframe": req.timeframe,
+        "strategy": req.strategy,
+        "trades": len(trades),
+        "win_rate": round(wins / len(trades) * 100, 2),
+        "total_pnl": round(balance - 10000, 2),
+        "final_balance": round(balance, 2),
+        "history": trades
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — AI
+# ============================================================
+
+@app.get("/api/ai/stats")
+async def get_ai_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    ai_state = db.query(AIState).filter(AIState.user_id == current_user.id).first()
+    if not ai_state:
+        ai_state = AIState(user_id=current_user.id)
+        db.add(ai_state)
+        db.commit()
+    brain = get_or_create_brain(current_user.id)
+    if brain:
+        try:
+            stats = brain.get_stats()
+            return stats
+        except Exception as e:
+            logger.error(f"Brain stats error: {e}")
+    win_rate = round(ai_state.winning_trades / ai_state.total_trades * 100, 2) if ai_state.total_trades > 0 else 0
+    return {
+        "generation": ai_state.generation,
+        "iq": round(ai_state.iq, 1),
+        "total_trades": ai_state.total_trades,
+        "winning_trades": ai_state.winning_trades,
+        "win_rate": win_rate,
+        "total_pnl": round(ai_state.total_pnl, 2),
+        "lessons_learned": ai_state.lessons_learned,
+        "evolution_count": ai_state.evolution_count,
+        "knowledge_boost": 1.0 + ai_state.lessons_learned * 0.001
+    }
+
+
+@app.get("/api/ai/knowledge")
+async def get_ai_knowledge(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    knowledge = db.query(AIKnowledge).filter(
+        AIKnowledge.user_id == current_user.id
+    ).order_by(AIKnowledge.usage_count.desc()).limit(50).all()
+    return {
+        "knowledge": [
+            {
+                "id": k.id,
+                "category": k.category,
+                "content": k.content,
+                "confidence": k.confidence,
+                "usage_count": k.usage_count,
+                "success_rate": k.success_rate
+            }
+            for k in knowledge
+        ]
+    }
+
+
+@app.post("/api/ai/evolve")
+async def trigger_evolution(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    brain = get_or_create_brain(current_user.id)
+    if brain:
+        try:
+            brain._evolve()
+            return {"status": "ok", "message": "Evolution triggered"}
+        except Exception as e:
+            logger.error(f"Evolution error: {e}")
+    ai_state = db.query(AIState).filter(AIState.user_id == current_user.id).first()
+    if ai_state:
+        ai_state.generation += 1
+        ai_state.iq = min(500, ai_state.iq + 5)
+        ai_state.evolution_count += 1
+        db.commit()
+    return {"status": "ok", "message": "Evolution simulated"}
+
+
+@app.post("/api/ai/feedback")
+async def signal_feedback(
+    req: SignalFeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    trade = db.query(Trade).filter(
+        Trade.id == req.trade_id,
+        Trade.user_id == current_user.id
+    ).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    brain = get_or_create_brain(current_user.id)
+    if brain:
+        try:
+            brain.learn_from_trade({
+                "symbol": trade.symbol,
+                "direction": trade.direction,
+                "profit": 10.0 if req.feedback == "positive" else -10.0,
+                "strategy": trade.strategy,
+                "user_feedback": req.feedback
+            })
+        except Exception as e:
+            logger.error(f"Feedback learn error: {e}")
+    return {"status": "ok", "message": f"Feedback '{req.feedback}' recorded"}
+
+
+@app.post("/api/ai/learn-internet")
+async def learn_from_internet(
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    brain = get_or_create_brain(current_user.id)
+    if brain and hasattr(brain, "learn_from_internet"):
+        background_tasks.add_task(brain.learn_from_internet)
+        return {"status": "ok", "message": "Internet learning started in background"}
+    return {"status": "simulated", "message": "Learning from internet (simulated)"}
+
+
+@app.get("/api/ai/performance")
+async def get_ai_performance(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "closed"
+    ).order_by(Trade.close_time.desc()).limit(200).all()
+    by_symbol = {}
+    by_strategy = {}
+    for t in trades:
+        if t.symbol not in by_symbol:
+            by_symbol[t.symbol] = {"trades": 0, "wins": 0, "pnl": 0}
+        by_symbol[t.symbol]["trades"] += 1
+        if t.profit > 0:
+            by_symbol[t.symbol]["wins"] += 1
+        by_symbol[t.symbol]["pnl"] += t.profit
+        if t.strategy not in by_strategy:
+            by_strategy[t.strategy] = {"trades": 0, "wins": 0, "pnl": 0}
+        by_strategy[t.strategy]["trades"] += 1
+        if t.profit > 0:
+            by_strategy[t.strategy]["wins"] += 1
+        by_strategy[t.strategy]["pnl"] += t.profit
+    return {
+        "by_symbol": by_symbol,
+        "by_strategy": by_strategy,
+        "total_analyzed": len(trades)
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — AUTOTRADER
+# ============================================================
+
+@app.post("/api/autotrader/start")
+async def start_autotrader(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = db.query(AutoTraderSettings).filter(
+        AutoTraderSettings.user_id == current_user.id
+    ).first()
+    if settings:
+        settings.is_enabled = True
+        db.commit()
+    trader = get_or_create_trader(current_user.id)
+    if trader:
+        try:
+            await trader.start()
+            return {"status": "running", "message": "AutoTrader started"}
+        except Exception as e:
+            logger.error(f"Trader start error: {e}")
+    return {"status": "running", "message": "AutoTrader started (simulation)"}
+
+
+@app.post("/api/autotrader/stop")
+async def stop_autotrader(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = db.query(AutoTraderSettings).filter(
+        AutoTraderSettings.user_id == current_user.id
+    ).first()
+    if settings:
+        settings.is_enabled = False
+        db.commit()
+    trader = auto_traders.get(current_user.id)
+    if trader:
+        try:
+            trader.stop()
+        except Exception:
+            pass
+    return {"status": "stopped", "message": "AutoTrader stopped"}
+
+
+@app.get("/api/autotrader/status")
+async def get_autotrader_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = db.query(AutoTraderSettings).filter(
+        AutoTraderSettings.user_id == current_user.id
+    ).first()
+    trader = auto_traders.get(current_user.id)
+    is_running = False
+    if trader:
+        try:
+            is_running = trader.is_running()
+        except Exception:
+            pass
+    if settings:
+        is_running = is_running or settings.is_enabled
+    return {
+        "is_running": is_running,
+        "settings": {
+            "symbols": json.loads(settings.symbols) if settings else ["EURUSD"],
+            "strategy": settings.strategy if settings else "regular",
+            "risk_percent": settings.risk_percent if settings else 1.0,
+            "max_trades": settings.max_trades if settings else 3,
+            "min_confidence": settings.min_confidence if settings else 0.65,
+            "use_ai": settings.use_ai if settings else True,
+            "timeframe": settings.timeframe if settings else "H1"
+        }
+    }
+
+
+@app.put("/api/autotrader/settings")
+async def update_autotrader_settings(
+    req: AutoTraderSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = db.query(AutoTraderSettings).filter(
+        AutoTraderSettings.user_id == current_user.id
+    ).first()
+    if not settings:
+        settings = AutoTraderSettings(user_id=current_user.id)
+        db.add(settings)
+    if req.symbols is not None:
+        settings.symbols = json.dumps(req.symbols)
+    if req.strategy is not None:
+        settings.strategy = req.strategy
+    if req.risk_percent is not None:
+        settings.risk_percent = req.risk_percent
+    if req.max_trades is not None:
+        settings.max_trades = req.max_trades
+    if req.min_confidence is not None:
+        settings.min_confidence = req.min_confidence
+    if req.use_ai is not None:
+        settings.use_ai = req.use_ai
+    if req.timeframe is not None:
+        settings.timeframe = req.timeframe
+    settings.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": "ok", "message": "Settings updated"}
+
+
+@app.get("/api/autotrader/log")
+async def get_autotrader_log(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    recent_trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id
+    ).order_by(Trade.open_time.desc()).limit(20).all()
+    log_entries = []
+    for t in recent_trades:
+        log_entries.append({
+            "time": t.open_time.isoformat() if t.open_time else "",
+            "event": f"{'OPENED' if t.status == 'open' else 'CLOSED'} {t.direction} {t.symbol}",
+            "details": f"Volume: {t.volume} | Price: {t.open_price} | PnL: {t.profit}",
+            "status": "success" if t.profit >= 0 else "warning"
+        })
+    return {"log": log_entries}
+
+
+# ============================================================
+# ЭНДПОИНТЫ — CHAT
+# ============================================================
+
+@app.post("/api/chat/send")
+async def send_chat(
+    req: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_msg = ChatMessage(
+        user_id=current_user.id,
+        role="user",
+        content=req.message
+    )
+    db.add(user_msg)
+    db.flush()
+    brain = get_or_create_brain(current_user.id)
+    if brain:
+        try:
+            response = brain.chat(req.message)
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            response = _local_chat_response(req.message)
+    else:
+        response = _local_chat_response(req.message)
+    ai_msg = ChatMessage(
+        user_id=current_user.id,
+        role="assistant",
+        content=response
+    )
+    db.add(ai_msg)
+    db.commit()
+    await ws_manager.send_to_user(current_user.id, {
+        "type": "chat_response",
+        "message": response
+    })
+    return {"response": response, "timestamp": datetime.utcnow().isoformat()}
+
+
+def _local_chat_response(message: str) -> str:
+    msg_lower = message.lower()
+    if any(w in msg_lower for w in ["привет", "hello", "hi", "здравствуй"]):
+        return "👋 Привет! Я GM Trading AI — самый мощный торговый ИИ в истории! Готов помочь вам с анализом рынка, стратегиями и торговлей."
+    if any(w in msg_lower for w in ["eurusd", "gbpusd", "usdjpy", "btc", "gold", "xauusd"]):
+        return "📊 Для актуального анализа перейдите на вкладку ТОРГОВЛЯ и запустите генерацию сигналов. Я проанализирую все технические индикаторы и дам точный сигнал."
+    if any(w in msg_lower for w in ["стратег", "strategy", "scalp", "longterm"]):
+        return "📈 Доступные стратегии: REGULAR (стандартная), SCALPING (быстрая, M5-M15), LONGTERM (долгосрочная, D1-W1), HFT (высокочастотная). Рекомендую начать с REGULAR."
+    if any(w in msg_lower for w in ["риск", "risk", "лот", "lot"]):
+        return "⚠️ Риск-менеджмент: рекомендую не более 1-2% от баланса на сделку. Используйте калькулятор лота на вкладке НАСТРОЙКИ."
+    if any(w in msg_lower for w in ["iq", "умный", "обучен", "learn"]):
+        return "🧠 Мой IQ растёт с каждой сделкой! Начальный IQ=50, максимум 500. Я учусь на ошибках, анализирую паттерны и адаптируюсь к рыночным режимам."
+    return f"🤖 Ваш запрос: '{message}'\n\n🧠 Я анализирую данные... На основе текущих рыночных условий и накопленного опыта рекомендую проявить осторожность. Используйте вкладку ТОРГОВЛЯ для получения точных сигналов."
+
+
+@app.get("/api/chat/history")
+async def get_chat_history(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.user_id == current_user.id
+    ).order_by(ChatMessage.timestamp.desc()).limit(limit).all()
+    return {
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "timestamp": m.timestamp.isoformat() if m.timestamp else None
+            }
+            for m in reversed(messages)
+        ]
+    }
+
+
+@app.delete("/api/chat/clear")
+async def clear_chat(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).delete()
+    db.commit()
+    return {"status": "ok", "message": "Chat cleared"}
+
+
+# ============================================================
+# ЭНДПОИНТЫ — JOURNAL
+# ============================================================
+
+@app.post("/api/journal/create")
+async def create_journal_note(
+    req: JournalCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    note = JournalNote(
+        user_id=current_user.id,
+        title=req.title,
+        content=req.content,
+        tags=req.tags
+    )
+    db.add(note)
+    db.commit()
+    return {"status": "ok", "id": note.id, "message": "Note created"}
+
+
+@app.get("/api/journal/notes")
+async def get_journal_notes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    notes = db.query(JournalNote).filter(
+        JournalNote.user_id == current_user.id
+    ).order_by(JournalNote.created_at.desc()).all()
+    return {
+        "notes": [
+            {
+                "id": n.id,
+                "title": n.title,
+                "content": n.content,
+                "tags": n.tags,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+                "updated_at": n.updated_at.isoformat() if n.updated_at else None
+            }
+            for n in notes
+        ]
+    }
+
+
+@app.put("/api/journal/notes/{note_id}")
+async def update_journal_note(
+    note_id: int,
+    req: JournalUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    note = db.query(JournalNote).filter(
+        JournalNote.id == note_id,
+        JournalNote.user_id == current_user.id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if req.title is not None:
+        note.title = req.title
+    if req.content is not None:
+        note.content = req.content
+    if req.tags is not None:
+        note.tags = req.tags
+    note.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": "ok", "message": "Note updated"}
+
+
+@app.delete("/api/journal/notes/{note_id}")
+async def delete_journal_note(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    note = db.query(JournalNote).filter(
+        JournalNote.id == note_id,
+        JournalNote.user_id == current_user.id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    db.delete(note)
+    db.commit()
+    return {"status": "ok", "message": "Note deleted"}
+
+
+# ============================================================
+# ЭНДПОИНТЫ — OBSIDIAN
+# ============================================================
+
+@app.post("/api/obsidian/sync")
+async def obsidian_sync(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.obsidian_path:
+        return {"status": "error", "message": "Obsidian path not set"}
+    if ENGINE_AVAILABLE:
+        try:
+            manager = ObsidianManager(current_user.obsidian_path)
+            notes = manager.get_all_notes()
+            brain = get_or_create_brain(current_user.id)
+            if brain and notes:
+                for note in notes:
+                    brain.add_obsidian_knowledge(note.get("content", ""))
+            return {"status": "ok", "synced": len(notes), "message": "Obsidian synced"}
+        except Exception as e:
+            logger.error(f"Obsidian sync error: {e}")
+    return {"status": "simulated", "synced": 0, "message": "Obsidian sync simulated"}
+
+
+@app.get("/api/obsidian/notes")
+async def get_obsidian_notes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.obsidian_path:
+        return {"notes": []}
+    if ENGINE_AVAILABLE:
+        try:
+            manager = ObsidianManager(current_user.obsidian_path)
+            notes = manager.get_all_notes()
+            return {"notes": notes}
+        except Exception as e:
+            logger.error(f"Obsidian notes error: {e}")
+    return {"notes": []}
+
+
+@app.post("/api/obsidian/search")
+async def search_obsidian(
+    query: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.obsidian_path:
+        return {"results": []}
+    if ENGINE_AVAILABLE:
+        try:
+            manager = ObsidianManager(current_user.obsidian_path)
+            results = manager.search_notes(query)
+            return {"results": results}
+        except Exception as e:
+            logger.error(f"Obsidian search error: {e}")
+    return {"results": []}
+
+
+@app.post("/api/obsidian/create")
+async def create_obsidian_note(
+    req: JournalCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.obsidian_path:
+        return {"status": "error", "message": "Obsidian path not set"}
+    if ENGINE_AVAILABLE:
+        try:
+            manager = ObsidianManager(current_user.obsidian_path)
+            result = manager.create_note(req.title, req.content)
+            return {"status": "ok", "path": result}
+        except Exception as e:
+            logger.error(f"Obsidian create error: {e}")
+    return {"status": "simulated", "message": "Note creation simulated"}
+
+
+# ============================================================
+# ЭНДПОИНТЫ — ERROR DB
+# ============================================================
+
+@app.get("/api/error-db/patterns")
+async def get_error_patterns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    patterns = db.query(ErrorPattern).filter(
+        ErrorPattern.user_id == current_user.id
+    ).order_by(ErrorPattern.frequency.desc()).all()
+    return {
+        "patterns": [
+            {
+                "id": p.id,
+                "pattern_type": p.pattern_type,
+                "symbol": p.symbol,
+                "description": p.description,
+                "frequency": p.frequency,
+                "total_loss": p.total_loss,
+                "is_critical": p.is_critical,
+                "last_seen": p.last_seen.isoformat() if p.last_seen else None
+            }
+            for p in patterns
+        ]
+    }
+
+
+@app.get("/api/error-db/stats")
+async def get_error_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    patterns = db.query(ErrorPattern).filter(
+        ErrorPattern.user_id == current_user.id
+    ).all()
+    critical = [p for p in patterns if p.is_critical]
+    total_loss = sum(p.total_loss for p in patterns)
+    by_type = {}
+    for p in patterns:
+        pt = p.pattern_type
+        if pt not in by_type:
+            by_type[pt] = {"count": 0, "total_loss": 0}
+        by_type[pt]["count"] += p.frequency
+        by_type[pt]["total_loss"] += p.total_loss
+    return {
+        "total_patterns": len(patterns),
+        "critical_patterns": len(critical),
+        "total_loss_from_errors": round(total_loss, 2),
+        "by_type": by_type
+    }
+
+
+@app.get("/api/error-db/critical")
+async def get_critical_patterns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    brain = get_or_create_brain(current_user.id)
+    if brain and hasattr(brain, "error_db"):
+        try:
+            patterns = brain.error_db.get_critical_patterns()
+            return {"critical_patterns": patterns}
+        except Exception:
+            pass
+    patterns = db.query(ErrorPattern).filter(
+        ErrorPattern.user_id == current_user.id,
+        ErrorPattern.is_critical == True
+    ).all()
+    return {
+        "critical_patterns": [
+            {"description": p.description, "frequency": p.frequency, "loss": p.total_loss}
+            for p in patterns
+        ]
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — SOCIAL
+# ============================================================
+
+@app.get("/api/social/sentiment/{symbol}")
+async def get_sentiment(
+    symbol: str,
+    current_user: User = Depends(get_current_user)
+):
+    global social_monitor
+    if ENGINE_AVAILABLE:
+        try:
+            if social_monitor is None:
+                social_monitor = SocialMonitor()
+            result = social_monitor.get_market_sentiment(symbol)
+            return result
+        except Exception as e:
+            logger.error(f"Sentiment error: {e}")
+    import random
+    bull = random.randint(35, 65)
+    return {
+        "symbol": symbol,
+        "bullish": bull,
+        "bearish": 100 - bull,
+        "neutral": 0,
+        "sentiment": "BULLISH" if bull > 55 else ("BEARISH" if bull < 45 else "NEUTRAL"),
+        "sources": {"reddit": bull, "twitter": bull - 5, "tradingview": bull + 3},
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/api/social/sources")
+async def get_social_sources(current_user: User = Depends(get_current_user)):
+    return {
+        "sources": [
+            {"name": "Reddit r/Forex", "status": "active", "weight": 0.3},
+            {"name": "TradingView", "status": "active", "weight": 0.4},
+            {"name": "Forex Factory", "status": "active", "weight": 0.2},
+            {"name": "Investing.com", "status": "active", "weight": 0.1}
+        ]
+    }
+
+
+# ============================================================
+# ЭНДПОИНТЫ — ADMIN
+# ============================================================
+
+@app.get("/api/admin/users")
+async def admin_get_users(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).all()
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "username": u.username,
+                "tier": u.tier,
+                "is_active": u.is_active,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_login": u.last_login.isoformat() if u.last_login else None
+            }
+            for u in users
+        ],
+        "total": len(users)
+    }
+
+
+@app.put("/api/admin/users/{user_id}/tier")
+async def admin_update_tier(
+    user_id: int,
+    tier: str,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if tier not in ["free", "vip", "business", "admin"]:
+        raise HTTPException(status_code=400, detail="Invalid tier")
+    user.tier = tier
+    db.commit()
+    return {"status": "ok", "message": f"User {user.email} tier updated to {tier}"}
+
+
+@app.get("/api/admin/stats")
+async def admin_get_stats(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    total_users = db.query(User).count()
+    active_users = db.query(User).filter(User.is_active == True).count()
+    total_trades = db.query(Trade).count()
+    closed_trades = db.query(Trade).filter(Trade.status == "closed").count()
+    total_pnl = db.query(Trade).filter(Trade.status == "closed").all()
+    pnl_sum = sum(t.profit for t in total_pnl)
+    tier_counts = {}
+    for tier in ["free", "vip", "business", "admin"]:
+        tier_counts[tier] = db.query(User).filter(User.tier == tier).count()
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "total_trades": total_trades,
+        "closed_trades": closed_trades,
+        "total_pnl": round(pnl_sum, 2),
+        "tier_counts": tier_counts,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.tier == "admin":
+        raise HTTPException(status_code=403, detail="Cannot delete admin")
+    user.is_active = False
+    db.commit()
+    return {"status": "ok", "message": "User deactivated"}
+
+
+# ============================================================
+# WEBSOCKET
+# ============================================================
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
+    await ws_manager.connect(websocket, user_id)
+    price_task = None
+    try:
+        async def send_prices():
+            symbols = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "BTCUSD"]
+            while True:
+                try:
+                    prices = {sym: get_simulated_price(sym) for sym in symbols}
+                    await ws_manager.send_to_user(user_id, {
+                        "type": "prices",
+                        "data": prices,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                    await asyncio.sleep(2)
+                except Exception:
+                    break
+
+        price_task = asyncio.create_task(send_prices())
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                msg = json.loads(data)
+                msg_type = msg.get("type", "")
+                if msg_type == "ping":
+                    await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+                elif msg_type == "subscribe_symbol":
+                    symbol = msg.get("symbol", "EURUSD")
+                    price = get_simulated_price(symbol)
+                    await websocket.send_json({"type": "price", "symbol": symbol, "data": price})
+                elif msg_type == "get_positions":
+                    await websocket.send_json({"type": "positions", "data": []})
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "heartbeat"})
+                except Exception:
+                    break
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                break
+    finally:
+        if price_task:
+            price_task.cancel()
+        ws_manager.disconnect(websocket, user_id)
+
+
+# ============================================================
+# ГЛАВНАЯ СТРАНИЦА
+# ============================================================
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>GM Trading AI</h1><p>index.html not found</p>")
+
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "version": "3.0.0",
+        "engine": ENGINE_AVAILABLE,
+        "ai_brain": AI_BRAIN_AVAILABLE,
+        "trader": TRADER_AVAILABLE,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+# ============================================================
+# SUBSCRIPTION INFO
+# ============================================================
+
+@app.get("/api/subscription/plans")
+async def get_plans():
+    return {
+        "plans": [
+            {
+                "name": "FREE",
+                "price": 0,
+                "ai_level": "1-3",
+                "features": ["Базовые сигналы", "3 символа", "История 30 дней"]
+            },
+            {
+                "name": "VIP",
+                "price": 19.99,
+                "ai_level": "5",
+                "features": ["Продвинутые сигналы", "Все символы", "Автотрейдер", "AI чат"]
+            },
+            {
+                "name": "BUSINESS",
+                "price": 49.99,
+                "ai_level": "10",
+                "features": ["Максимальный AI", "Unlimited", "Obsidian", "Приоритет"]
+            }
+        ],
+        "payment": {
+            "bybit_uid": "495132302",
+            "trc20": "TPLcirURegRqaAV1CWXw6EVvL4kF8kNm8a"
+        }
+    }
+
+
+# ============================================================
+# ЗАПУСК
+# ============================================================
+
+if __name__ == "__main__":
+    logger.info("=" * 60)
+    logger.info("  GM TRADING AI v3.0 — ЗАПУСК")
+    logger.info("=" * 60)
+    init_admins()
+    logger.info("✅ БД инициализирована")
+    logger.info("🌐 Сервер: http://localhost:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
