@@ -263,13 +263,21 @@ class ModelDriftMonitor:
             if min_val == max_val:
                 return 0.0
 
-            exp_counts, bin_edges = np.histogram(expected_arr, bins=bins, range=(min_val, max_val))
-            act_counts, _ = np.histogram(actual_arr, bins=bins, range=(min_val, max_val))
+            exp_counts, bin_edges = np.histogram(
+                expected_arr, bins=bins, range=(min_val, max_val)
+            )
+            act_counts, _ = np.histogram(
+                actual_arr, bins=bins, range=(min_val, max_val)
+            )
 
             exp_pct = (exp_counts + 1) / (len(expected_arr) + bins)
             act_pct = (act_counts + 1) / (len(actual_arr) + bins)
 
-            psi = float(np.sum((act_pct - exp_pct) * np.log(act_pct / (exp_pct + 1e-10) + 1e-10)))
+            psi = float(
+                np.sum(
+                    (act_pct - exp_pct) * np.log(act_pct / (exp_pct + 1e-10) + 1e-10)
+                )
+            )
             return round(abs(psi), 4)
 
         except Exception as e:
@@ -291,9 +299,8 @@ class ModelDriftMonitor:
             psi_value = 0.0
             if NUMPY_OK:
                 exp_data = [self.baseline_win_rate] * self.window
-                act_data = [recent_win_rate] * len(self.recent_results)
-                if act_data:
-                    psi_value = self.calculate_psi(exp_data, act_data)
+                act_data = [recent_win_rate] * max(len(self.recent_results), 1)
+                psi_value = self.calculate_psi(exp_data, act_data)
 
             drift_detected = wr_drift or pnl_drift or psi_value > self.psi_threshold
 
@@ -347,8 +354,20 @@ class ModelDriftMonitor:
 
 class AITester:
     def __init__(self):
-        self.version_a = {"name": "v_current", "weights": {}, "trades": 0, "wins": 0, "pnl": 0.0}
-        self.version_b = {"name": "v_experimental", "weights": {}, "trades": 0, "wins": 0, "pnl": 0.0}
+        self.version_a = {
+            "name": "v_current",
+            "weights": {},
+            "trades": 0,
+            "wins": 0,
+            "pnl": 0.0
+        }
+        self.version_b = {
+            "name": "v_experimental",
+            "weights": {},
+            "trades": 0,
+            "wins": 0,
+            "pnl": 0.0
+        }
         self.active_version = "a"
         self.initialized = False
         self.results_a = []
@@ -358,13 +377,12 @@ class AITester:
     def initialize(self, weights_a: dict, weights_b: dict = None):
         """Инициализация двух версий"""
         try:
-            self.version_a["weights"] = weights_a.copy()
+            self.version_a["weights"] = weights_a.copy() if weights_a else {}
             if weights_b:
                 self.version_b["weights"] = weights_b.copy()
             else:
-                # Мутация весов для версии B
                 mutated = {}
-                for k, v in weights_a.items():
+                for k, v in (weights_a or {}).items():
                     mutation = random.gauss(0, 0.1)
                     mutated[k] = max(0.1, min(5.0, v + mutation))
                 self.version_b["weights"] = mutated
@@ -380,14 +398,10 @@ class AITester:
             if not self.initialized:
                 return signal
 
-            # Версия A
-            score_a = signal.get("score", 0)
             weights_a = self.version_a["weights"]
-            boost_a = sum(weights_a.values()) / max(len(weights_a), 1)
-
-            # Версия B
             weights_b = self.version_b["weights"]
-            boost_b = sum(weights_b.values()) / max(len(weights_b), 1)
+            boost_a = sum(weights_a.values()) / max(len(weights_a), 1) if weights_a else 1.0
+            boost_b = sum(weights_b.values()) / max(len(weights_b), 1) if weights_b else 1.0
 
             if self.active_version == "a":
                 final_confidence = min(0.99, signal.get("confidence", 0.5) * boost_a / 10)
@@ -427,7 +441,6 @@ class AITester:
                 if len(self.results_b) > 100:
                     self.results_b = self.results_b[-100:]
 
-            # Автопереключение
             total = self.version_a["trades"] + self.version_b["trades"]
             if total > 0 and total % self.switch_threshold == 0:
                 self._auto_switch()
@@ -448,7 +461,10 @@ class AITester:
 
             if score_b > score_a + 0.05:
                 self.active_version = "b"
-                logger.info(f"A/B: переключение на B (score_b={score_b:.3f} > score_a={score_a:.3f})")
+                logger.info(
+                    f"A/B: переключение на B "
+                    f"(score_b={score_b:.3f} > score_a={score_a:.3f})"
+                )
             else:
                 self.active_version = "a"
                 logger.info(f"A/B: остаётся A (score_a={score_a:.3f})")
@@ -511,8 +527,10 @@ class RegimeMemory:
                 self.memory[regime] = {}
             if strategy not in self.memory[regime]:
                 self.memory[regime][strategy] = {
-                    "trades": 0, "wins": 0,
-                    "pnl": 0.0, "win_rate": 0.5
+                    "trades": 0,
+                    "wins": 0,
+                    "pnl": 0.0,
+                    "win_rate": 0.5
                 }
             m = self.memory[regime][strategy]
             m["trades"] += 1
@@ -666,14 +684,14 @@ class AutoTrader:
             self.start_time = datetime.utcnow()
             self.state["status"] = "running"
 
-            # Загрузка настроек из БД
             self._load_settings()
 
-            # Инициализация A/B тестирования
             if self.brain:
-                self.ab_tester.initialize(self.brain.weights)
+                try:
+                    self.ab_tester.initialize(self.brain.weights)
+                except Exception:
+                    self.ab_tester.initialize({})
 
-            # Запуск в фоновом потоке
             self._thread = threading.Thread(
                 target=self._run_sync_loop,
                 daemon=True,
@@ -708,7 +726,7 @@ class AutoTrader:
         return self._running
 
     def _run_sync_loop(self):
-        """Синхронный торговый цикл"""
+        """Синхронный торговый цикл в отдельном потоке"""
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -729,12 +747,14 @@ class AutoTrader:
 
                 await self._analyze_and_trade()
                 self._update_state()
+                self._auto_close_trades()
 
-                # Проверка дрейфа модели
                 if self.cycle_count % 10 == 0:
                     self._check_model_drift()
 
-                # Пауза
+                if self.cycle_count % 50 == 0:
+                    self._evolve_strategies()
+
                 for _ in range(self.interval_seconds):
                     if not self._running or self._stop_event.is_set():
                         break
@@ -752,20 +772,17 @@ class AutoTrader:
             if balance <= 0:
                 return
 
-            # Проверка дневного лимита
             daily_check = self.risk_manager.check_daily_limit(balance)
             if not daily_check["allowed"]:
                 logger.warning(f"Дневной лимит: {daily_check['issues']}")
                 self._notify_user("⚠️ Дневной лимит достигнут", "warning")
                 return
 
-            # Текущие позиции
             open_trades = self._get_open_trades_count()
             if open_trades >= self.max_trades:
                 logger.debug(f"Макс позиции: {open_trades}/{self.max_trades}")
                 return
 
-            # Анализ символов
             for symbol in self.symbols:
                 if not self._running:
                     break
@@ -782,29 +799,26 @@ class AutoTrader:
         """Обработка одного символа"""
         try:
             self.state["current_symbol"] = symbol
-
-            # Получение OHLCV
             ohlcv = self._get_ohlcv_cached(symbol, self.timeframe)
             if not ohlcv or len(ohlcv) < 50:
                 return
 
-            # Анализ
             try:
                 from gm_engine import TechnicalAnalyzer, StrategyEngine
                 analyzer = TechnicalAnalyzer()
                 strategy_engine = StrategyEngine()
-                indicators = analyzer.calculate_indicators(ohlcv)
                 regime = analyzer.detect_market_regime(ohlcv)
                 signal = strategy_engine.analyze(symbol, ohlcv, self.strategy, balance)
             except ImportError:
                 signal = self._simulate_signal(symbol)
-                regime = random.choice(["RANGING", "MODERATE_TREND", "CONSOLIDATION"])
-                indicators = {}
+                regime = random.choice([
+                    "RANGING", "MODERATE_TREND",
+                    "CONSOLIDATION", "STRONG_TREND"
+                ])
 
             direction = signal.get("direction", "WAIT")
-            confidence = signal.get("confidence", 0.0)
+            confidence = float(signal.get("confidence", 0.0))
 
-            # AI буст
             if self.use_ai and self.brain:
                 try:
                     boost = self.brain.get_knowledge_boost()
@@ -812,36 +826,57 @@ class AutoTrader:
                 except Exception:
                     pass
 
-            # Рекомендация режима
+            signal = self.ab_tester.compare(signal)
+            confidence = float(signal.get("confidence", confidence))
+
             regime_rec = self.regime_memory.recommend(regime)
             rec_strategy = regime_rec.get("strategy", self.strategy)
 
             self.state["last_signal"] = {
                 "symbol": symbol,
                 "direction": direction,
-                "confidence": confidence,
+                "confidence": round(confidence, 4),
                 "regime": regime,
-                "recommended_strategy": rec_strategy
+                "recommended_strategy": rec_strategy,
+                "time": datetime.utcnow().isoformat()
             }
 
-            # Проверка минимальной уверенности
             if direction == "WAIT" or confidence < self.min_confidence:
                 return
 
-            # Risk/Reward проверка
-            entry = signal.get("entry", 0) or signal.get("indicators", {}).get("current_price", 0)
-            sl = signal.get("sl", 0)
-            tp = signal.get("tp", 0)
+            entry = float(signal.get("entry", 0) or 0)
+            sl = float(signal.get("sl", 0) or 0)
+            tp = float(signal.get("tp", 0) or 0)
 
-            if entry > 0 and sl > 0 and tp > 0:
+            if entry <= 0:
+                entry = self._get_current_price(symbol)
+            if entry <= 0:
+                return
+
+            if sl <= 0 or tp <= 0:
+                atr = entry * 0.002
+                if direction == "BUY":
+                    sl = entry - atr * 1.5
+                    tp = entry + atr * 3.0
+                else:
+                    sl = entry + atr * 1.5
+                    tp = entry - atr * 3.0
+
+            if sl > 0 and tp > 0:
                 rr = self.risk_manager.calculate_risk_reward(entry, sl, tp, direction)
                 if not rr.get("acceptable", True):
                     logger.debug(f"R:R неприемлемый для {symbol}: {rr['rr_ratio']:.2f}")
                     return
 
-            # Расчёт лота
-            sl_dist = abs(entry - sl) if entry > 0 and sl > 0 else entry * 0.002
-            win_rate = self.brain.winning_trades / max(self.brain.total_trades, 1) if self.brain else 0.5
+            sl_dist = abs(entry - sl) if sl > 0 else entry * 0.002
+            win_rate = 0.5
+            if self.brain:
+                try:
+                    total_t = max(self.brain.total_trades, 1)
+                    win_rate = self.brain.winning_trades / total_t
+                except Exception:
+                    win_rate = 0.5
+
             lot = self.risk_manager.calculate_lot(
                 balance=balance,
                 win_rate=win_rate,
@@ -851,7 +886,6 @@ class AutoTrader:
                 price=entry
             )
 
-            # Открытие сделки
             result = self._open_trade_in_db(
                 symbol=symbol,
                 direction=direction,
@@ -866,12 +900,15 @@ class AutoTrader:
 
             if result:
                 self.trades_opened += 1
-                self.risk_manager.daily_trades.append({"profit": 0, "time": datetime.utcnow().isoformat()})
-                self._log_event(
-                    f"OPENED {direction} {symbol} lot={lot} @ {entry:.5f} "
-                    f"conf={confidence:.2f} regime={regime}",
-                    "success"
+                self.risk_manager.daily_trades.append({
+                    "profit": 0,
+                    "time": datetime.utcnow().isoformat()
+                })
+                msg = (
+                    f"OPENED {direction} {symbol} lot={lot} "
+                    f"@ {entry:.5f} conf={confidence:.2f} regime={regime}"
                 )
+                self._log_event(msg, "success")
                 self._notify_user(
                     f"📈 Открыта {direction} {symbol} | conf={confidence:.0%}",
                     "info"
@@ -881,10 +918,9 @@ class AutoTrader:
             logger.error(f"_process_symbol error for {symbol}: {e}")
 
     def _get_ohlcv_all_timeframes(self, symbol: str) -> dict:
-        """Получение данных со всех таймфреймов с кэшем"""
+        """Получение данных со всех таймфреймов"""
         result = {}
-        timeframes = ["M15", "H1", "H4"]
-        for tf in timeframes:
+        for tf in ["M15", "H1", "H4"]:
             result[tf] = self._get_ohlcv_cached(symbol, tf)
         return result
 
@@ -893,8 +929,10 @@ class AutoTrader:
         try:
             cache_key = f"{symbol}_{timeframe}"
             now = time.time()
-            if (cache_key in self._ohlcv_cache and
-                    now - self._ohlcv_cache_time.get(cache_key, 0) < self._ohlcv_ttl):
+            if (
+                cache_key in self._ohlcv_cache
+                and now - self._ohlcv_cache_time.get(cache_key, 0) < self._ohlcv_ttl
+            ):
                 return self._ohlcv_cache[cache_key]
 
             try:
@@ -917,13 +955,20 @@ class AutoTrader:
         """Генерация симулированных OHLCV данных"""
         try:
             base_prices = {
-                "EURUSD": 1.0850, "GBPUSD": 1.2650, "USDJPY": 149.50,
-                "XAUUSD": 2050.0, "BTCUSD": 43000.0, "ETHUSD": 2500.0
+                "EURUSD": 1.0850,
+                "GBPUSD": 1.2650,
+                "USDJPY": 149.50,
+                "XAUUSD": 2050.0,
+                "BTCUSD": 43000.0,
+                "ETHUSD": 2500.0,
+                "USDCHF": 0.8950,
+                "AUDUSD": 0.6550
             }
             base = base_prices.get(symbol, 1.0)
             now = int(time.time())
             result = []
             price = base
+
             for i in range(count):
                 t = now - (count - i) * 3600
                 change = random.gauss(0, base * 0.001)
@@ -932,11 +977,37 @@ class AutoTrader:
                 h = max(o, c) + abs(random.gauss(0, base * 0.0005))
                 l = min(o, c) - abs(random.gauss(0, base * 0.0005))
                 v = random.randint(100, 5000)
-                result.append([t, round(o, 5), round(h, 5), round(l, 5), round(c, 5), v])
+                result.append([
+                    t,
+                    round(o, 5),
+                    round(h, 5),
+                    round(l, 5),
+                    round(c, 5),
+                    v
+                ])
                 price = c
+
             return result
-        except Exception:
+        except Exception as e:
+            logger.error(f"_generate_sim_ohlcv error: {e}")
             return []
+
+    def _get_current_price(self, symbol: str) -> float:
+        """Получение текущей цены"""
+        try:
+            from gm_engine import MT5Manager
+            manager = MT5Manager()
+            price_data = manager.get_price(symbol)
+            return float(price_data.get("bid", 0))
+        except Exception:
+            base_prices = {
+                "EURUSD": 1.0850,
+                "GBPUSD": 1.2650,
+                "USDJPY": 149.50,
+                "XAUUSD": 2050.0
+            }
+            base = base_prices.get(symbol, 1.0)
+            return base * (1 + random.gauss(0, 0.0005))
 
     def _get_balance(self) -> float:
         """Получение баланса из БД"""
@@ -945,12 +1016,15 @@ class AutoTrader:
             try:
                 from sqlalchemy import text
                 result = db.execute(
-                    text("SELECT SUM(profit) FROM trades WHERE user_id=:uid AND status='closed'"),
+                    text(
+                        "SELECT SUM(profit) FROM trades "
+                        "WHERE user_id=:uid AND status='closed'"
+                    ),
                     {"uid": self.user_id}
                 ).fetchone()
                 pnl = float(result[0] or 0)
                 balance = 10000.0 + pnl
-                self.state["balance"] = balance
+                self.state["balance"] = round(balance, 2)
                 return balance
             except Exception as e:
                 logger.debug(f"_get_balance db error: {e}")
@@ -968,7 +1042,10 @@ class AutoTrader:
             try:
                 from sqlalchemy import text
                 result = db.execute(
-                    text("SELECT COUNT(*) FROM trades WHERE user_id=:uid AND status='open'"),
+                    text(
+                        "SELECT COUNT(*) FROM trades "
+                        "WHERE user_id=:uid AND status='open'"
+                    ),
                     {"uid": self.user_id}
                 ).fetchone()
                 count = int(result[0] or 0)
@@ -1000,6 +1077,12 @@ class AutoTrader:
             try:
                 from sqlalchemy import text
                 ticket = str(uuid.uuid4())[:8].upper()
+                ai_decision = json.dumps({
+                    "auto_trader": True,
+                    "boost": self.brain.get_knowledge_boost() if self.brain else 1.0,
+                    "regime": regime,
+                    "ab_version": self.ab_tester.active_version
+                })
                 db.execute(text("""
                     INSERT INTO trades
                     (user_id, ticket, symbol, direction, volume, open_price,
@@ -1021,11 +1104,7 @@ class AutoTrader:
                     "ot": datetime.utcnow(),
                     "conf": confidence,
                     "regime": regime,
-                    "ai": json.dumps({
-                        "auto_trader": True,
-                        "boost": self.brain.get_knowledge_boost() if self.brain else 1.0,
-                        "regime": regime
-                    })
+                    "ai": ai_decision
                 })
                 db.commit()
                 return True
@@ -1039,5 +1118,454 @@ class AutoTrader:
             logger.error(f"_open_trade_in_db outer error: {e}")
             return False
 
+    def _auto_close_trades(self):
+        """Автоматическое закрытие сделок по SL/TP"""
+        try:
+            db = self.db_factory()
+            try:
+                from sqlalchemy import text
+                rows = db.execute(
+                    text(
+                        "SELECT id, symbol, direction, open_price, sl, tp, volume "
+                        "FROM trades WHERE user_id=:uid AND status='open'"
+                    ),
+                    {"uid": self.user_id}
+                ).fetchall()
+
+                for row in rows:
+                    trade_id = row[0]
+                    symbol = row[1]
+                    direction = row[2]
+                    open_price = float(row[3] or 0)
+                    sl = float(row[4] or 0)
+                    tp = float(row[5] or 0)
+                    volume = float(row[6] or 0.01)
+
+                    current_price = self._get_current_price(symbol)
+                    if current_price <= 0:
+                        continue
+
+                    should_close = False
+                    close_reason = ""
+                    profit = 0.0
+
+                    if direction == "BUY":
+                        pip_val = volume * 10
+                        profit = (current_price - open_price) * pip_val * 10000
+                        if sl > 0 and current_price <= sl:
+                            should_close = True
+                            close_reason = "SL"
+                        elif tp > 0 and current_price >= tp:
+                            should_close = True
+                            close_reason = "TP"
+                    else:
+                        pip_val = volume * 10
+                        profit = (open_price - current_price) * pip_val * 10000
+                        if sl > 0 and current_price >= sl:
+                            should_close = True
+                            close_reason = "SL"
+                        elif tp > 0 and current_price <= tp:
+                            should_close = True
+                            close_reason = "TP"
+
+                    if should_close:
+                        db.execute(text("""
+                            UPDATE trades
+                            SET status='closed', close_price=:cp,
+                                profit=:pnl, close_time=:ct,
+                                close_reason=:reason
+                            WHERE id=:tid
+                        """), {
+                            "cp": current_price,
+                            "pnl": round(profit, 2),
+                            "ct": datetime.utcnow(),
+                            "reason": close_reason,
+                            "tid": trade_id
+                        })
+                        db.commit()
+
+                        self.trades_closed += 1
+                        self.total_pnl += profit
+                        self.risk_manager.record_trade(profit)
+                        self.ab_tester.learn_from_result(profit)
+                        self.drift_monitor.add_result(profit, 0.7)
+
+                        if self.brain:
+                            try:
+                                trade_data = {
+                                    "symbol": symbol,
+                                    "direction": direction,
+                                    "profit": profit,
+                                    "strategy": self.strategy,
+                                    "confidence": 0.7,
+                                    "market_regime": "RANGING"
+                                }
+                                asyncio.create_task(
+                                    self._learn_from_closed_trade(trade_data)
+                                )
+                            except Exception:
+                                pass
+
+                        self._log_event(
+                            f"CLOSED {direction} {symbol} by {close_reason} "
+                            f"profit={profit:.2f}",
+                            "success" if profit > 0 else "warning"
+                        )
+                        self._notify_user(
+                            f"{'✅' if profit > 0 else '❌'} "
+                            f"Закрыта {direction} {symbol} | "
+                            f"P&L: ${profit:.2f} ({close_reason})",
+                            "info"
+                        )
+
+            except Exception as e:
+                logger.error(f"_auto_close_trades error: {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"_auto_close_trades outer error: {e}")
+
+    async def _learn_from_closed_trade(self, trade_data: dict):
+        """Обучение AI на закрытой сделке"""
+        try:
+            if self.brain:
+                await self.brain.learn_from_trade(trade_data)
+                regime = trade_data.get("market_regime", "RANGING")
+                strategy = trade_data.get("strategy", self.strategy)
+                profit = trade_data.get("profit", 0)
+                self.regime_memory.remember(regime, strategy, profit)
+        except Exception as e:
+            logger.error(f"_learn_from_closed_trade error: {e}")
+
     def _simulate_signal(self, symbol: str) -> dict:
-        """Симулированный сигн
+        """Симулированный сигнал"""
+        try:
+            directions = ["BUY", "SELL", "WAIT"]
+            weights = [0.35, 0.35, 0.30]
+            direction = random.choices(directions, weights=weights, k=1)[0]
+
+            base_prices = {
+                "EURUSD": 1.0850,
+                "GBPUSD": 1.2650,
+                "USDJPY": 149.50,
+                "XAUUSD": 2050.0
+            }
+            base = base_prices.get(symbol, 1.0)
+            price = base * (1 + random.gauss(0, 0.0005))
+            atr = price * 0.002
+            confidence = random.uniform(0.45, 0.85)
+
+            if direction == "BUY":
+                sl = price - atr * 1.5
+                tp = price + atr * 3.0
+            elif direction == "SELL":
+                sl = price + atr * 1.5
+                tp = price - atr * 3.0
+            else:
+                sl = 0.0
+                tp = 0.0
+
+            return {
+                "direction": direction,
+                "confidence": round(confidence, 4),
+                "entry": round(price, 5),
+                "sl": round(sl, 5),
+                "tp": round(tp, 5),
+                "atr": round(atr, 5),
+                "symbol": symbol,
+                "simulated": True
+            }
+        except Exception as e:
+            logger.error(f"_simulate_signal error: {e}")
+            return {"direction": "WAIT", "confidence": 0.0}
+
+    def _update_state(self):
+        """Обновление состояния"""
+        try:
+            self.state["status"] = "running" if self._running else "stopped"
+            self.state["cycle_count"] = self.cycle_count
+            self.state["trades_opened"] = self.trades_opened
+            self.state["trades_closed"] = self.trades_closed
+            self.state["total_pnl"] = round(self.total_pnl, 2)
+            self.state["last_cycle"] = (
+                self.last_cycle_time.isoformat()
+                if self.last_cycle_time else None
+            )
+            uptime = 0
+            if self.start_time:
+                uptime = int(
+                    (datetime.utcnow() - self.start_time).total_seconds()
+                )
+            self.state["uptime_seconds"] = uptime
+            self.state["last_error"] = self.last_error
+        except Exception as e:
+            logger.error(f"_update_state error: {e}")
+
+    def _check_model_drift(self):
+        """Проверка дрейфа модели"""
+        try:
+            if not self.drift_monitor.recent_results:
+                return
+
+            recent = self.drift_monitor.recent_results[-20:]
+            if not recent:
+                return
+
+            wins = sum(1 for r in recent if r["profit"] > 0)
+            recent_wr = wins / len(recent)
+            recent_pnl = sum(r["profit"] for r in recent) / len(recent)
+
+            if self.drift_monitor.baseline_win_rate is None:
+                self.drift_monitor.set_baseline(recent_wr, recent_pnl)
+                return
+
+            result = self.drift_monitor.check_drift(recent_wr, recent_pnl)
+            if result.get("drift"):
+                logger.warning(f"⚠️ Дрейф модели обнаружен: {result}")
+                self._notify_user(
+                    "⚠️ Обнаружен дрейф модели. Рекомендуется переобучение.",
+                    "warning"
+                )
+
+            if self.drift_monitor.should_retrain():
+                logger.info("🔄 Запуск переобучения из-за дрейфа модели")
+                self.drift_monitor.drift_count = 0
+                if self.brain:
+                    try:
+                        asyncio.create_task(self.brain._evolve())
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logger.error(f"_check_model_drift error: {e}")
+
+    def _evolve_strategies(self):
+        """Эволюция стратегий"""
+        try:
+            if self.brain:
+                asyncio.create_task(self.brain._evolve())
+                logger.info("🧬 Эволюция стратегий запущена")
+        except Exception as e:
+            logger.error(f"_evolve_strategies error: {e}")
+
+    def _notify_user(self, message: str, level: str = "info"):
+        """Уведомление пользователя"""
+        try:
+            notification = {
+                "user_id": self.user_id,
+                "message": message,
+                "level": level,
+                "time": datetime.utcnow().isoformat(),
+                "source": "AutoTrader"
+            }
+            self._log_event(message, level)
+
+            try:
+                db = self.db_factory()
+                try:
+                    from sqlalchemy import text
+                    db.execute(text("""
+                        INSERT INTO notifications
+                        (user_id, message, level, created_at)
+                        VALUES (:uid, :msg, :lvl, :ct)
+                    """), {
+                        "uid": self.user_id,
+                        "msg": message,
+                        "lvl": level,
+                        "ct": datetime.utcnow()
+                    })
+                    db.commit()
+                except Exception:
+                    pass
+                finally:
+                    db.close()
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.error(f"_notify_user error: {e}")
+
+    def _log_event(self, message: str, level: str = "info"):
+        """Запись события в лог"""
+        try:
+            entry = {
+                "time": datetime.utcnow().isoformat(),
+                "message": message,
+                "level": level,
+                "cycle": self.cycle_count
+            }
+            self.trade_log.append(entry)
+            if len(self.trade_log) > 500:
+                self.trade_log = self.trade_log[-500:]
+
+            if level == "success":
+                logger.info(f"✅ {message}")
+            elif level == "warning":
+                logger.warning(f"⚠️ {message}")
+            elif level == "error":
+                logger.error(f"❌ {message}")
+            else:
+                logger.debug(message)
+        except Exception as e:
+            logger.error(f"_log_event error: {e}")
+
+    def _load_settings(self):
+        """Загрузка настроек из БД"""
+        try:
+            db = self.db_factory()
+            try:
+                from sqlalchemy import text
+                result = db.execute(
+                    text(
+                        "SELECT setting_key, setting_value FROM user_settings "
+                        "WHERE user_id=:uid"
+                    ),
+                    {"uid": self.user_id}
+                ).fetchall()
+
+                settings = {row[0]: row[1] for row in result}
+
+                if "at_symbols" in settings:
+                    try:
+                        self.symbols = json.loads(settings["at_symbols"])
+                    except Exception:
+                        pass
+
+                if "at_strategy" in settings:
+                    self.strategy = settings["at_strategy"]
+
+                if "at_timeframe" in settings:
+                    self.timeframe = settings["at_timeframe"]
+
+                if "at_min_confidence" in settings:
+                    try:
+                        self.min_confidence = float(settings["at_min_confidence"])
+                    except Exception:
+                        pass
+
+                if "at_max_trades" in settings:
+                    try:
+                        self.max_trades = int(settings["at_max_trades"])
+                    except Exception:
+                        pass
+
+                if "at_interval" in settings:
+                    try:
+                        self.interval_seconds = int(settings["at_interval"])
+                    except Exception:
+                        pass
+
+                if "at_use_ai" in settings:
+                    self.use_ai = settings["at_use_ai"].lower() == "true"
+
+                logger.info(f"Настройки AutoTrader загружены для user {self.user_id}")
+
+            except Exception as e:
+                logger.debug(f"_load_settings db error: {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"_load_settings error: {e}")
+
+    def update_settings(self, settings: dict):
+        """Обновление настроек"""
+        try:
+            if "symbols" in settings:
+                self.symbols = settings["symbols"]
+            if "strategy" in settings:
+                self.strategy = settings["strategy"]
+            if "timeframe" in settings:
+                self.timeframe = settings["timeframe"]
+            if "min_confidence" in settings:
+                self.min_confidence = float(settings["min_confidence"])
+            if "max_trades" in settings:
+                self.max_trades = int(settings["max_trades"])
+            if "interval_seconds" in settings:
+                self.interval_seconds = int(settings["interval_seconds"])
+            if "use_ai" in settings:
+                self.use_ai = bool(settings["use_ai"])
+            if "risk_percent" in settings:
+                self.risk_percent = float(settings["risk_percent"])
+                self.risk_manager.max_risk_per_trade = self.risk_percent
+
+            logger.info(f"Настройки AutoTrader обновлены: {settings}")
+        except Exception as e:
+            logger.error(f"update_settings error: {e}")
+
+    def get_status(self) -> dict:
+        """Полный статус автотрейдера"""
+        try:
+            self._update_state()
+            uptime = 0
+            if self.start_time and self._running:
+                uptime = int(
+                    (datetime.utcnow() - self.start_time).total_seconds()
+                )
+
+            return {
+                "running": self._running,
+                "status": self.state.get("status", "stopped"),
+                "user_id": self.user_id,
+                "symbols": self.symbols,
+                "strategy": self.strategy,
+                "timeframe": self.timeframe,
+                "min_confidence": self.min_confidence,
+                "max_trades": self.max_trades,
+                "interval_seconds": self.interval_seconds,
+                "use_ai": self.use_ai,
+                "cycle_count": self.cycle_count,
+                "trades_opened": self.trades_opened,
+                "trades_closed": self.trades_closed,
+                "total_pnl": round(self.total_pnl, 2),
+                "uptime_seconds": uptime,
+                "uptime_formatted": self._format_uptime(uptime),
+                "balance": self.state.get("balance", 0),
+                "positions_count": self.state.get("positions_count", 0),
+                "last_signal": self.state.get("last_signal"),
+                "last_error": self.last_error,
+                "current_symbol": self.state.get("current_symbol"),
+                "risk_stats": self.risk_manager.get_stats(),
+                "drift_status": {
+                    "drift_detected": self.drift_monitor.drift_detected,
+                    "drift_count": self.drift_monitor.drift_count,
+                    "should_retrain": self.drift_monitor.should_retrain()
+                },
+                "ab_test": self.ab_tester.get_stats(),
+                "regime_recommendations": self.regime_memory.get_all_recommendations(),
+                "recent_log": self.trade_log[-20:] if self.trade_log else []
+            }
+        except Exception as e:
+            logger.error(f"get_status error: {e}")
+            return {
+                "running": self._running,
+                "status": "error",
+                "error": str(e)
+            }
+
+    def _format_uptime(self, seconds: int) -> str:
+        """Форматирование времени работы"""
+        try:
+            h = seconds // 3600
+            m = (seconds % 3600) // 60
+            s = seconds % 60
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        except Exception:
+            return "00:00:00"
+
+    def get_performance_report(self) -> dict:
+        """Отчёт о производительности"""
+        try:
+            total = self.trades_closed
+            if total == 0:
+                return {
+                    "total_trades": 0,
+                    "message": "Нет закрытых сделок"
+                }
+
+            db = self.db_factory()
+            try:
+                from sqlalchemy import text
+                rows = db.execute(
+                    text(
+                        "SELECT profit, strategy, symbol, direction, market_regime "
+                        "FROM trades WHERE user_id=:
