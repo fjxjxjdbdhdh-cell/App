@@ -3934,3 +3934,966 @@ if __name__ == "__main__":
         format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
     )
     demo()
+# ============================================================
+# OBSIDIAN TRADING JOURNAL — АВТОЗАПИСЬ СДЕЛОК ИИ
+# Добавить в конец основного файла GM AI SUPREME
+# ============================================================
+
+import os
+import re
+import json
+import time
+from datetime import datetime
+from pathlib import Path
+from collections import defaultdict
+
+
+class ObsidianTradingJournal:
+    """
+    ИИ сам создаёт папку и файлы в Obsidian.
+    Записывает прибыльные и убыточные сделки.
+    Запоминает убыточные паттерны и НЕ повторяет их.
+    """
+
+    def __init__(self, obsidian_vault_path: str = None):
+        # Автоопределение пути к Obsidian
+        self.vault_path = self._find_or_create_vault(obsidian_vault_path)
+        
+        # Папки внутри хранилища
+        self.journal_folder = os.path.join(self.vault_path, "GM_AI_Trading")
+        self.trades_folder = os.path.join(self.journal_folder, "Trades")
+        self.analysis_folder = os.path.join(self.journal_folder, "Analysis")
+        self.patterns_folder = os.path.join(self.journal_folder, "Patterns")
+        self.stats_folder = os.path.join(self.journal_folder, "Statistics")
+        
+        # Создание всех папок
+        self._create_folder_structure()
+        
+        # Файлы
+        self.losing_patterns_file = os.path.join(
+            self.patterns_folder, "LOSING_PATTERNS.md")
+        self.winning_patterns_file = os.path.join(
+            self.patterns_folder, "WINNING_PATTERNS.md")
+        self.blacklist_file = os.path.join(
+            self.journal_folder, "BLACKLIST.json")
+        self.stats_file = os.path.join(
+            self.stats_folder, "OVERALL_STATS.md")
+        
+        # Загрузка чёрного списка убыточных паттернов
+        self.blacklist = self._load_blacklist()
+        
+        # Статистика сессии
+        self.session_trades = []
+        self.session_start = datetime.now()
+        
+        # Создание базовых файлов если не существуют
+        self._init_base_files()
+        
+        logger.info(f"📓 Obsidian Journal инициализирован: {self.vault_path}")
+        logger.info(f"   Папка: {self.journal_folder}")
+        logger.info(f"   Чёрный список: {len(self.blacklist)} паттернов")
+
+    def _find_or_create_vault(self, custom_path: str = None) -> str:
+        """Найти или создать Obsidian хранилище"""
+        
+        # 1. Пользовательский путь
+        if custom_path and os.path.exists(custom_path):
+            return custom_path
+        
+        # 2. Стандартные пути Obsidian по ОС
+        home = Path.home()
+        standard_paths = [
+            # Windows
+            home / "Documents" / "Obsidian",
+            home / "OneDrive" / "Obsidian",
+            home / "Desktop" / "Obsidian",
+            # Mac
+            home / "Library" / "Mobile Documents" / "iCloud~md~obsidian" / "Documents",
+            home / "Documents" / "Obsidian",
+            # Linux
+            home / "Obsidian",
+            home / "Documents" / "Obsidian",
+            # Текущая директория
+            Path.cwd() / "Obsidian_Vault",
+            Path.cwd() / "obsidian",
+        ]
+        
+        # Ищем существующие
+        for path in standard_paths:
+            if path.exists():
+                logger.info(f"✅ Найдено Obsidian хранилище: {path}")
+                return str(path)
+        
+        # 3. Создаём в текущей директории
+        fallback = Path.cwd() / "GM_AI_Obsidian_Vault"
+        fallback.mkdir(parents=True, exist_ok=True)
+        logger.info(f"📁 Создано новое хранилище: {fallback}")
+        return str(fallback)
+
+    def _create_folder_structure(self):
+        """Создание структуры папок"""
+        folders = [
+            self.journal_folder,
+            self.trades_folder,
+            self.analysis_folder,
+            self.patterns_folder,
+            self.stats_folder,
+            os.path.join(self.trades_folder, "Profitable"),
+            os.path.join(self.trades_folder, "Losing"),
+            os.path.join(self.trades_folder, "By_Symbol"),
+        ]
+        
+        for folder in folders:
+            os.makedirs(folder, exist_ok=True)
+        
+        logger.info(f"📁 Структура папок создана в {self.journal_folder}")
+
+    def _init_base_files(self):
+        """Создание базовых файлов если не существуют"""
+        
+        # README
+        readme = os.path.join(self.journal_folder, "README.md")
+        if not os.path.exists(readme):
+            self._write_file(readme, f"""# 🧠 GM AI Supreme Trading Journal
+
+> Автоматически создан GM AI Supreme Brain v5.0
+> Дата создания: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## 📁 Структура
+
+- **Trades/Profitable** — Прибыльные сделки
+- **Trades/Losing** — Убыточные сделки  
+- **Trades/By_Symbol** — Сделки по символам
+- **Patterns/WINNING_PATTERNS** — Паттерны которые работают
+- **Patterns/LOSING_PATTERNS** — Паттерны которые НЕ работают
+- **Statistics/OVERALL_STATS** — Общая статистика
+- **BLACKLIST.json** — Чёрный список убыточных комбинаций
+
+## 🚫 Правило ИИ
+ИИ автоматически **блокирует** сделки которые соответствуют
+убыточным паттернам из чёрного списка.
+
+## 📊 Теги
+- `#profitable` — Прибыльная сделка
+- `#losing` — Убыточная сделка
+- `#blacklisted` — Заблокировано ИИ
+- `#learning` — ИИ обучается
+
+---
+*Обновляется автоматически каждую сделку*
+""")
+
+        # Blacklist если не существует
+        if not os.path.exists(self.blacklist_file):
+            self._save_blacklist({})
+        
+        # Winning patterns
+        if not os.path.exists(self.winning_patterns_file):
+            self._write_file(self.winning_patterns_file, 
+                           "# ✅ Выигрышные Паттерны\n\n"
+                           "> Паттерны которые приносят прибыль\n\n"
+                           "| Паттерн | Win Rate | Кол-во | Средний P&L |\n"
+                           "|---------|----------|--------|-------------|\n")
+        
+        # Losing patterns
+        if not os.path.exists(self.losing_patterns_file):
+            self._write_file(self.losing_patterns_file,
+                           "# ❌ Убыточные Паттерны (ЧЁРНЫЙ СПИСОК)\n\n"
+                           "> ИИ БЛОКИРУЕТ эти комбинации\n\n"
+                           "| Паттерн | Loss Rate | Кол-во | Средний убыток |\n"
+                           "|---------|-----------|--------|----------------|\n")
+
+    def _load_blacklist(self) -> dict:
+        """Загрузка чёрного списка убыточных паттернов"""
+        try:
+            if os.path.exists(self.blacklist_file):
+                with open(self.blacklist_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    logger.info(f"🚫 Загружен чёрный список: {len(data)} записей")
+                    return data
+        except Exception as e:
+            logger.error(f"Ошибка загрузки blacklist: {e}")
+        return {}
+
+    def _save_blacklist(self, blacklist: dict):
+        """Сохранение чёрного списка"""
+        try:
+            with open(self.blacklist_file, 'w', encoding='utf-8') as f:
+                json.dump(blacklist, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Ошибка сохранения blacklist: {e}")
+
+    def _write_file(self, filepath: str, content: str):
+        """Запись файла"""
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            logger.error(f"Ошибка записи файла {filepath}: {e}")
+
+    def _append_file(self, filepath: str, content: str):
+        """Добавление в файл"""
+        try:
+            with open(filepath, 'a', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            logger.error(f"Ошибка добавления в файл {filepath}: {e}")
+
+    def _get_pattern_key(self, trade: dict) -> str:
+        """Создание ключа паттерна для идентификации"""
+        try:
+            indicators = trade.get("indicators", {})
+            regime = trade.get("regime", "UNKNOWN")
+            signal = trade.get("signal", "HOLD")
+            
+            # RSI зона
+            rsi = indicators.get("rsi", 50)
+            if rsi < 30: rsi_zone = "OVERSOLD"
+            elif rsi > 70: rsi_zone = "OVERBOUGHT"
+            elif rsi < 45: rsi_zone = "BEARISH"
+            elif rsi > 55: rsi_zone = "BULLISH"
+            else: rsi_zone = "NEUTRAL"
+            
+            # ADX сила
+            adx = indicators.get("adx", 25)
+            adx_strength = "STRONG" if adx > 35 else (
+                "MODERATE" if adx > 20 else "WEAK")
+            
+            # Паттерн ключ
+            top_patterns = trade.get("top_patterns", [])
+            pattern_names = []
+            for p in top_patterns[:2]:
+                # Извлекаем имя паттерна из строки
+                name = str(p).split("(")[0].strip()
+                pattern_names.append(name)
+            
+            key_parts = [
+                f"SIGNAL:{signal}",
+                f"REGIME:{regime}",
+                f"RSI:{rsi_zone}",
+                f"ADX:{adx_strength}",
+            ]
+            if pattern_names:
+                key_parts.append(f"PAT:{'+'.join(pattern_names)}")
+            
+            return "|".join(key_parts)
+            
+        except Exception:
+            return f"SIGNAL:{trade.get('signal', 'HOLD')}|UNKNOWN"
+
+    def is_blacklisted(self, trade: dict) -> tuple:
+        """
+        Проверка: является ли паттерн убыточным?
+        Возвращает (is_blocked: bool, reason: str)
+        """
+        try:
+            pattern_key = self._get_pattern_key(trade)
+            
+            if pattern_key in self.blacklist:
+                info = self.blacklist[pattern_key]
+                loss_rate = info.get("loss_rate", 0)
+                count = info.get("count", 0)
+                avg_loss = info.get("avg_loss", 0)
+                
+                # Блокируем если: >70% убытков И более 3 сделок
+                if loss_rate > 0.70 and count >= 3:
+                    reason = (
+                        f"🚫 ЗАБЛОКИРОВАНО: Паттерн '{pattern_key[:50]}' "
+                        f"убыточен {loss_rate:.0%} ({count} раз, "
+                        f"средний убыток: {avg_loss:.4f})"
+                    )
+                    return True, reason
+                    
+                # Блокируем если >85% убытков И хотя бы 2 сделки
+                if loss_rate > 0.85 and count >= 2:
+                    reason = (
+                        f"🚫 ЗАБЛОКИРОВАНО (критично): Паттерн убыточен "
+                        f"{loss_rate:.0%} ({count} раз)"
+                    )
+                    return True, reason
+            
+            return False, ""
+            
+        except Exception as e:
+            logger.error(f"is_blacklisted error: {e}")
+            return False, ""
+
+    def record_trade(self, trade: dict) -> str:
+        """
+        Главный метод: Запись сделки в Obsidian.
+        Возвращает путь к созданному файлу.
+        """
+        try:
+            profit = trade.get("profit", 0)
+            is_profitable = profit > 0
+            signal = trade.get("signal", "HOLD")
+            symbol = trade.get("symbol", "UNKNOWN")
+            timestamp = datetime.now()
+            
+            # Обновление чёрного списка
+            self._update_blacklist(trade)
+            
+            # Добавление в статистику сессии
+            self.session_trades.append(trade)
+            
+            # Создание файла сделки
+            trade_file = self._create_trade_file(trade, timestamp)
+            
+            # Обновление файла по символу
+            self._update_symbol_file(trade, symbol)
+            
+            # Обновление паттернов
+            self._update_pattern_files(trade, is_profitable)
+            
+            # Обновление общей статистики
+            self._update_stats_file()
+            
+            # Обновление дневного дайджеста
+            self._update_daily_digest(trade, timestamp)
+            
+            status = "✅ ПРИБЫЛЬНАЯ" if is_profitable else "❌ УБЫТОЧНАЯ"
+            logger.info(f"📓 Obsidian: {status} сделка записана → {trade_file}")
+            
+            return trade_file
+            
+        except Exception as e:
+            logger.error(f"record_trade error: {e}")
+            return ""
+
+    def _create_trade_file(self, trade: dict, timestamp: datetime) -> str:
+        """Создание файла отдельной сделки"""
+        try:
+            profit = trade.get("profit", 0)
+            is_profitable = profit > 0
+            signal = trade.get("signal", "HOLD")
+            symbol = trade.get("symbol", "UNKNOWN")
+            
+            # Определение папки
+            subfolder = "Profitable" if is_profitable else "Losing"
+            
+            # Имя файла
+            ts_str = timestamp.strftime('%Y%m%d_%H%M%S')
+            profit_str = f"+{profit:.4f}" if profit > 0 else f"{profit:.4f}"
+            filename = f"{ts_str}_{symbol.replace('/', '_')}_{signal}_{profit_str}.md"
+            filepath = os.path.join(self.trades_folder, subfolder, filename)
+            
+            # Индикаторы
+            indicators = trade.get("indicators", {})
+            patterns = trade.get("top_patterns", [])
+            
+            # Эмодзи
+            emoji = "💚" if is_profitable else "💔"
+            tag = "#profitable" if is_profitable else "#losing"
+            
+            # Паттерн ключ для ссылки на blacklist
+            pattern_key = self._get_pattern_key(trade)
+            
+            content = f"""# {emoji} {signal} {symbol} | {profit_str}
+
+**Дата:** {timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+**Теги:** {tag} #{signal.lower()} #{symbol.replace('/', '').lower()}
+
+---
+
+## 📊 Сделка
+
+| Параметр | Значение |
+|----------|----------|
+| Символ | `{symbol}` |
+| Сигнал | `{signal}` |
+| Цена входа | `{trade.get('entry_price', 0):.5f}` |
+| Цена выхода | `{trade.get('exit_price', 0):.5f}` |
+| **P&L** | **`{profit_str}`** |
+| P&L % | `{trade.get('profit_pct', profit * 100):.3f}%` |
+| Результат | {'✅ ПРИБЫЛЬ' if is_profitable else '❌ УБЫТОК'} |
+
+---
+
+## 🌊 Рыночный Контекст
+
+| Параметр | Значение |
+|----------|----------|
+| Режим рынка | `{trade.get('regime', 'UNKNOWN')}` |
+| Уверенность | `{trade.get('confidence', 0):.1%}` |
+| IQ ИИ | `{trade.get('iq', 0):.0f}` |
+
+---
+
+## 📈 Индикаторы
+
+| Индикатор | Значение |
+|-----------|----------|
+| RSI | `{indicators.get('rsi', 0):.1f}` |
+| MACD | `{indicators.get('macd', 0):.6f}` |
+| ADX | `{indicators.get('adx', 0):.1f}` |
+| Stoch %K | `{indicators.get('stoch_k', 0):.1f}` |
+| Volume Ratio | `{indicators.get('volume_ratio', 1):.2f}x` |
+| ATR% | `{indicators.get('atr_pct', 0):.3f}%` |
+| BB% | `{indicators.get('bb_pct', 0.5):.3f}` |
+
+---
+
+## 🕯️ Паттерны
+
+---
+
+## 🧠 Анализ ИИ
+
+{'### ✅ Что сработало' if is_profitable else '### ❌ Почему убыток'}
+
+{self._generate_ai_lesson(trade, is_profitable)}
+
+---
+
+## ⚡ Уровни
+
+| Уровень | Цена |
+|---------|------|
+| Стоп-лосс | `{trade.get('stop_loss', 0):.5f}` |
+| Take Profit | `{trade.get('take_profit', 0):.5f}` |
+| Поддержка | `{indicators.get('support', 0):.5f}` |
+| Сопротивление | `{indicators.get('resistance', 0):.5f}` |
+
+---
+
+*Записано автоматически GM AI Supreme Brain*
+"""
+            self._write_file(filepath, content)
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"_create_trade_file error: {e}")
+            return ""
+
+    def _generate_ai_lesson(self, trade: dict, is_profitable: bool) -> str:
+        """Генерация урока от ИИ"""
+        try:
+            indicators = trade.get("indicators", {})
+            rsi = indicators.get("rsi", 50)
+            adx = indicators.get("adx", 25)
+            regime = trade.get("regime", "UNKNOWN")
+            signal = trade.get("signal", "HOLD")
+            
+            if is_profitable:
+                lessons = []
+                if rsi < 35 and signal == "BUY":
+                    lessons.append("✅ Покупка при перепроданном RSI работает в данном режиме")
+                if adx > 30:
+                    lessons.append(f"✅ Сильный тренд (ADX={adx:.0f}) подтвердил сигнал")
+                if regime == "TRENDING_UP" and signal == "BUY":
+                    lessons.append("✅ Торговля по тренду в правильном направлении")
+                if regime == "TRENDING_DOWN" and signal == "SELL":
+                    lessons.append("✅ Шорт в нисходящем тренде — верная стратегия")
+                if not lessons:
+                    lessons.append("✅ Сигнал подтверждён несколькими индикаторами")
+                return "\n".join(lessons)
+            else:
+                lessons = []
+                if rsi > 65 and signal == "BUY":
+                    lessons.append("❌ Покупка при перекупленном RSI рискованна")
+                if adx < 20:
+                    lessons.append(f"❌ Слабый тренд (ADX={adx:.0f}) — плохие условия для входа")
+                if regime == "VOLATILE":
+                    lessons.append("❌ Не торговать в высоковолатильном режиме")
+                if regime == "RANGING" and signal in ("BUY", "SELL"):
+                    lessons.append("❌ В боковике лучше использовать mean-reversion")
+                if not lessons:
+                    lessons.append("❌ Условия входа не были оптимальными")
+                lessons.append("\n> 🚫 **ИИ занесёт этот паттерн в чёрный список если повторится**")
+                return "\n".join(lessons)
+                
+        except Exception:
+            return "Анализ недоступен"
+
+    def _update_blacklist(self, trade: dict):
+        """Обновление чёрного списка на основе результата сделки"""
+        try:
+            profit = trade.get("profit", 0)
+            is_loss = profit < 0
+            pattern_key = self._get_pattern_key(trade)
+            
+            if pattern_key not in self.blacklist:
+                self.blacklist[pattern_key] = {
+                    "count": 0,
+                    "losses": 0,
+                    "wins": 0,
+                    "total_pnl": 0.0,
+                    "loss_rate": 0.0,
+                    "avg_loss": 0.0,
+                    "avg_win": 0.0,
+                    "first_seen": datetime.now().isoformat(),
+                    "last_seen": datetime.now().isoformat(),
+                    "is_blocked": False
+                }
+            
+            entry = self.blacklist[pattern_key]
+            entry["count"] += 1
+            entry["total_pnl"] += profit
+            entry["last_seen"] = datetime.now().isoformat()
+            
+            if is_loss:
+                entry["losses"] += 1
+                losses_list = entry.get("losses_list", [])
+                losses_list.append(abs(profit))
+                entry["losses_list"] = losses_list[-20:]  # Хранить последние 20
+                entry["avg_loss"] = sum(losses_list) / len(losses_list)
+            else:
+                entry["wins"] += 1
+                wins_list = entry.get("wins_list", [])
+                wins_list.append(profit)
+                entry["wins_list"] = wins_list[-20:]
+                entry["avg_win"] = sum(wins_list) / len(wins_list)
+            
+            # Пересчёт loss rate
+            entry["loss_rate"] = entry["losses"] / entry["count"]
+            
+            # Автоблокировка
+            if entry["loss_rate"] > 0.70 and entry["count"] >= 3:
+                if not entry["is_blocked"]:
+                    entry["is_blocked"] = True
+                    logger.warning(
+                        f"🚫 ПАТТЕРН ЗАБЛОКИРОВАН: {pattern_key[:60]} "
+                        f"(loss_rate={entry['loss_rate']:.0%})"
+                    )
+                    # Записать в losing patterns
+                    self._append_file(
+                        self.losing_patterns_file,
+                        f"| `{pattern_key[:50]}` | "
+                        f"{entry['loss_rate']:.0%} | "
+                        f"{entry['count']} | "
+                        f"-{entry['avg_loss']:.4f} |\n"
+                    )
+            
+            # Разблокировка если улучшился
+            if entry["is_blocked"] and entry["loss_rate"] < 0.50 and entry["count"] >= 10:
+                entry["is_blocked"] = False
+                logger.info(f"✅ Паттерн разблокирован: {pattern_key[:60]}")
+            
+            self._save_blacklist(self.blacklist)
+            
+        except Exception as e:
+            logger.error(f"_update_blacklist error: {e}")
+
+    def _update_symbol_file(self, trade: dict, symbol: str):
+        """Обновление файла по символу"""
+        try:
+            safe_symbol = symbol.replace("/", "_").replace(":", "_")
+            symbol_file = os.path.join(
+                self.trades_folder, "By_Symbol", f"{safe_symbol}.md")
+            
+            profit = trade.get("profit", 0)
+            signal = trade.get("signal", "HOLD")
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+            emoji = "✅" if profit > 0 else "❌"
+            profit_str = f"+{profit:.4f}" if profit > 0 else f"{profit:.4f}"
+            
+            # Создание если не существует
+            if not os.path.exists(symbol_file):
+                self._write_file(symbol_file, 
+                    f"# 📊 {symbol} — История сделок\n\n"
+                    f"| Дата | Сигнал | P&L | Результат |\n"
+                    f"|------|--------|-----|----------|\n")
+            
+            self._append_file(
+                symbol_file,
+                f"| {timestamp} | {signal} | `{profit_str}` | {emoji} |\n"
+            )
+            
+        except Exception as e:
+            logger.error(f"_update_symbol_file error: {e}")
+
+    def _update_pattern_files(self, trade: dict, is_profitable: bool):
+        """Обновление файлов паттернов"""
+        try:
+            patterns = trade.get("top_patterns", [])
+            if not patterns:
+                return
+            
+            profit = trade.get("profit", 0)
+            profit_str = f"+{profit:.4f}" if profit > 0 else f"{profit:.4f}"
+            
+            if is_profitable:
+                for pattern in patterns[:3]:
+                    name = str(pattern).split("(")[0].strip()
+                    self._append_file(
+                        self.winning_patterns_file,
+                        f"| `{name}` | ✅ | +1 | `{profit_str}` |\n"
+                    )
+            else:
+                for pattern in patterns[:3]:
+                    name = str(pattern).split("(")[0].strip()
+                    self._append_file(
+                        self.losing_patterns_file,
+                        f"| `{name}` | ❌ | +1 | `{profit_str}` |\n"
+                    )
+                    
+        except Exception as e:
+            logger.error(f"_update_pattern_files error: {e}")
+
+    def _update_stats_file(self):
+        """Обновление файла общей статистики"""
+        try:
+            all_trades = self.session_trades
+            if not all_trades:
+                return
+            
+            total = len(all_trades)
+            wins = sum(1 for t in all_trades if t.get("profit", 0) > 0)
+            losses = total - wins
+            win_rate = wins / total if total > 0 else 0
+            total_pnl = sum(t.get("profit", 0) for t in all_trades)
+            
+            win_profits = [t["profit"] for t in all_trades 
+                          if t.get("profit", 0) > 0]
+            loss_profits = [t["profit"] for t in all_trades 
+                           if t.get("profit", 0) < 0]
+            
+            avg_win = sum(win_profits) / len(win_profits) if win_profits else 0
+            avg_loss = sum(loss_profits) / len(loss_profits) if loss_profits else 0
+            
+            blocked_count = sum(
+                1 for v in self.blacklist.values() 
+                if v.get("is_blocked", False)
+            )
+            
+            content = f"""# 📊 Общая Статистика GM AI Supreme
+
+> Обновлено: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## 🎯 Сессия
+
+| Метрика | Значение |
+|---------|----------|
+| Всего сделок | `{total}` |
+| ✅ Прибыльных | `{wins}` |
+| ❌ Убыточных | `{losses}` |
+| 📈 Win Rate | `{win_rate:.1%}` |
+| 💰 Общий P&L | `{total_pnl:+.4f}` |
+| 📊 Средний выигрыш | `{avg_win:+.4f}` |
+| 📉 Средний убыток | `{avg_loss:.4f}` |
+| 🚫 Заблокировано паттернов | `{blocked_count}` |
+
+## 🚫 Чёрный Список
+
+Паттернов в базе: **{len(self.blacklist)}**
+Заблокировано: **{blocked_count}**
+
+### Топ убыточных паттернов:
+"""
+            # Топ убыточных
+            sorted_black = sorted(
+                [(k, v) for k, v in self.blacklist.items() 
+                 if v.get("count", 0) >= 2],
+                key=lambda x: x[1].get("loss_rate", 0),
+                reverse=True
+            )[:5]
+            
+            for key, info in sorted_black:
+                content += (f"\n- `{key[:40]}...` — "
+                           f"Loss Rate: {info.get('loss_rate', 0):.0%} "
+                           f"({info.get('count', 0)} сделок)")
+            
+            content += "\n\n---\n*Автоматически обновляется GM AI*\n"
+            
+            self._write_file(self.stats_file, content)
+            
+        except Exception as e:
+            logger.error(f"_update_stats_file error: {e}")
+
+    def _update_daily_digest(self, trade: dict, timestamp: datetime):
+        """Обновление ежедневного дайджеста"""
+        try:
+            date_str = timestamp.strftime('%Y-%m-%d')
+            digest_file = os.path.join(
+                self.analysis_folder, f"Daily_{date_str}.md")
+            
+            profit = trade.get("profit", 0)
+            signal = trade.get("signal", "HOLD")
+            symbol = trade.get("symbol", "UNKNOWN")
+            emoji = "✅" if profit > 0 else "❌"
+            profit_str = f"+{profit:.4f}" if profit > 0 else f"{profit:.4f}"
+            
+            # Создание дневного файла если не существует
+            if not os.path.exists(digest_file):
+                self._write_file(digest_file, 
+                    f"# 📅 Дайджест {date_str}\n\n"
+                    f"| Время | Символ | Сигнал | P&L | |\n"
+                    f"|-------|--------|--------|-----|--|\n")
+            
+            time_str = timestamp.strftime('%H:%M:%S')
+            self._append_file(
+                digest_file,
+                f"| {time_str} | {symbol} | {signal} | `{profit_str}` | {emoji} |\n"
+            )
+            
+        except Exception as e:
+            logger.error(f"_update_daily_digest error: {e}")
+
+    def get_blacklisted_patterns_count(self) -> int:
+        """Количество заблокированных паттернов"""
+        return sum(1 for v in self.blacklist.values() 
+                  if v.get("is_blocked", False))
+
+    def get_session_summary(self) -> dict:
+        """Сводка сессии"""
+        try:
+            trades = self.session_trades
+            if not trades:
+                return {"message": "Нет сделок в сессии"}
+            
+            total = len(trades)
+            wins = sum(1 for t in trades if t.get("profit", 0) > 0)
+            total_pnl = sum(t.get("profit", 0) for t in trades)
+            
+            return {
+                "total_trades": total,
+                "wins": wins,
+                "losses": total - wins,
+                "win_rate": f"{wins/total:.1%}",
+                "total_pnl": round(total_pnl, 4),
+                "blacklisted_patterns": self.get_blacklisted_patterns_count(),
+                "vault_path": self.vault_path,
+                "journal_folder": self.journal_folder
+            }
+        except Exception:
+            return {}
+
+
+# ============================================================
+# ИНТЕГРАЦИЯ OBSIDIAN В GM SUPREME BRAIN
+# ============================================================
+
+class GMSupremeBrainWithObsidian(GMSupremeBrain):
+    """
+    Расширение GMSupremeBrain с поддержкой Obsidian.
+    ИИ сам записывает все сделки и учится на убытках.
+    """
+
+    def __init__(self, openai_api_key: str = None,
+                 obsidian_path: str = None):
+        super().__init__(openai_api_key=openai_api_key)
+        
+        # Подключение Obsidian журнала
+        self.obsidian = ObsidianTradingJournal(
+            obsidian_vault_path=obsidian_path)
+        
+        logger.info("📓 Obsidian Journal подключён к GM Supreme Brain")
+
+    def analyze_market(self, symbol: str, candles: list,
+                       balance: float = 1000.0,
+                       additional_context: str = "") -> dict:
+        """Анализ с проверкой чёрного списка"""
+        
+        # Стандартный анализ
+        result = super().analyze_market(
+            symbol=symbol,
+            candles=candles,
+            balance=balance,
+            additional_context=additional_context
+        )
+        
+        if "error" in result:
+            return result
+        
+        # Проверка чёрного списка Obsidian
+        # Формируем trade-like объект для проверки
+        trade_check = {
+            "signal": result.get("signal", "HOLD"),
+            "symbol": symbol,
+            "regime": result.get("regime", "UNKNOWN"),
+            "indicators": result.get("indicators", {}),
+            "top_patterns": result.get("top_patterns", []),
+            "confidence": result.get("confidence", 0),
+            "iq": result.get("iq", 0)
+        }
+        
+        is_blocked, block_reason = self.obsidian.is_blacklisted(trade_check)
+        
+        result["obsidian_blacklisted"] = is_blocked
+        result["obsidian_block_reason"] = block_reason
+        
+        if is_blocked:
+            logger.warning(f"🚫 OBSIDIAN БЛОК: {block_reason}")
+            result["signal"] = "HOLD"  # Переопределяем сигнал
+            result["signal_blocked"] = True
+            result["original_signal"] = trade_check["signal"]
+        
+        return result
+
+    def record_trade_result(self, signal: str, profit: float,
+                            entry_price: float, exit_price: float,
+                            symbol: str = "UNKNOWN",
+                            extra_data: dict = None):
+        """Запись результата с автоматической записью в Obsidian"""
+        
+        # Стандартная запись
+        super().record_trade_result(signal, profit, entry_price, exit_price)
+        
+        # Данные для Obsidian
+        last_analysis = {}
+        if self.market_memory:
+            last_analysis = dict(self.market_memory[-1])
+        
+        trade_data = {
+            "signal": signal,
+            "symbol": symbol,
+            "profit": profit,
+            "profit_pct": (exit_price - entry_price) / entry_price * 100
+                          if entry_price > 0 else 0,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "regime": last_analysis.get("regime", "UNKNOWN"),
+            "confidence": last_analysis.get("confidence", 0),
+            "iq": round(self.iq, 1),
+            "indicators": last_analysis.get("indicators", {}),
+            "top_patterns": last_analysis.get("top_patterns", []),
+            "stop_loss": last_analysis.get("stop_loss", 0),
+            "take_profit": last_analysis.get("take_profit", 0),
+        }
+        
+        # Добавление дополнительных данных
+        if extra_data:
+            trade_data.update(extra_data)
+        
+        # Запись в Obsidian
+        file_path = self.obsidian.record_trade(trade_data)
+        
+        if profit < 0:
+            logger.warning(
+                f"📓 Obsidian: Убыточная сделка записана. "
+                f"Заблокировано паттернов: "
+                f"{self.obsidian.get_blacklisted_patterns_count()}"
+            )
+        
+        return file_path
+
+    def get_obsidian_summary(self) -> dict:
+        """Получить сводку из Obsidian"""
+        return self.obsidian.get_session_summary()
+
+
+# ============================================================
+# ОБНОВЛЁННАЯ ФАБРИКА С OBSIDIAN
+# ============================================================
+
+def create_supreme_brain_with_obsidian(
+        openai_key: str = None,
+        obsidian_path: str = None) -> GMSupremeBrainWithObsidian:
+    """
+    Создание ИИ мозга с поддержкой Obsidian.
+    
+    Args:
+        openai_key: API ключ OpenAI (опционально)
+        obsidian_path: Путь к Obsidian хранилищу 
+                      (None = автоопределение)
+    """
+    brain = GMSupremeBrainWithObsidian(
+        openai_api_key=openai_key,
+        obsidian_path=obsidian_path
+    )
+    brain.start_continuous_learning()
+    return brain
+
+
+# ============================================================
+# ОБНОВЛЁННАЯ ДЕМОНСТРАЦИЯ
+# ============================================================
+
+def demo_with_obsidian():
+    """Демонстрация с записью в Obsidian"""
+    print("=" * 60)
+    print("🧠 GM AI SUPREME + 📓 OBSIDIAN JOURNAL")
+    print("=" * 60)
+
+    # Создание мозга с Obsidian
+    # Укажи свой путь: obsidian_path="/path/to/your/vault"
+    brain = create_supreme_brain_with_obsidian(
+        obsidian_path=None  # None = автопоиск/создание
+    )
+    
+    print(f"\n📁 Obsidian хранилище: {brain.obsidian.vault_path}")
+    print(f"📂 Папка сделок: {brain.obsidian.journal_folder}")
+
+    # Тестовые свечи
+    candles = []
+    price = 45000.0
+    for i in range(100):
+        op = price
+        change = random.gauss(0, price * 0.01)
+        cp = price + change
+        hp = max(op, cp) + abs(random.gauss(0, price * 0.005))
+        lp = min(op, cp) - abs(random.gauss(0, price * 0.005))
+        vol = random.uniform(10, 100)
+        ts = int(time.time() * 1000) - (100 - i) * 60000
+        candles.append([ts, op, hp, lp, cp, vol])
+        price = cp
+
+    print("\n🔍 Анализ BTC/USDT...")
+    result = brain.analyze_market("BTC/USDT", candles, 10000.0)
+    
+    signal = result.get("signal", "HOLD")
+    blocked = result.get("obsidian_blacklisted", False)
+    
+    print(f"\n📊 Сигнал: {signal}")
+    if blocked:
+        print(f"🚫 ЗАБЛОКИРОВАНО: {result.get('obsidian_block_reason', '')}")
+        print(f"   Оригинальный сигнал: {result.get('original_signal', 'N/A')}")
+    else:
+        print(f"✅ Сигнал разрешён (не в чёрном списке)")
+
+    # Симуляция сделок с записью в Obsidian
+    print("\n📝 Симуляция сделок + запись в Obsidian...")
+    symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+    
+    for i in range(8):
+        sym = random.choice(symbols)
+        sig = random.choice(["BUY", "SELL"])
+        ep = 45000.0 + random.uniform(-1000, 1000)
+        # Намеренно делаем некоторые убыточные
+        if i % 3 == 0:
+            profit = random.uniform(-0.05, -0.01)  # Убыток
+        else:
+            profit = random.uniform(0.01, 0.04)     # Прибыль
+        
+        xp = ep * (1 + profit)
+        
+        file_path = brain.record_trade_result(
+            signal=sig,
+            profit=profit * ep / 100,
+            entry_price=ep,
+            exit_price=xp,
+            symbol=sym
+        )
+        
+        status = "✅ ПРИБЫЛЬ" if profit > 0 else "❌ УБЫТОК"
+        print(f"   Сделка {i+1}: {sym} {sig} | {profit:+.2%} | {status}")
+        if file_path:
+            print(f"   📄 Файл: {os.path.basename(file_path)}")
+    
+    # Сводка Obsidian
+    print("\n📊 СВОДКА OBSIDIAN:")
+    summary = brain.get_obsidian_summary()
+    for key, val in summary.items():
+        print(f"   {key}: {val}")
+    
+    print(f"\n🚫 Заблокировано паттернов: "
+          f"{brain.obsidian.get_blacklisted_patterns_count()}")
+    
+    print(f"\n✅ Все файлы созданы в:")
+    print(f"   {brain.obsidian.journal_folder}")
+    
+    brain.stop_continuous_learning()
+    print("\n✅ Демонстрация завершена!")
+    print("=" * 60)
+
+
+# ============================================================
+# ТОЧКА ВХОДА
+# ============================================================
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+    )
+    demo_with_obsidian()
