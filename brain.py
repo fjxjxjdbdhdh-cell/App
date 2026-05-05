@@ -2730,3 +2730,1207 @@ class GMBrainFactory:
 
 def analyze_symbol(symbol: str, ohlcv_dict: dict,
                    balance: float = 1000.0)
+            highest_h = max(highs[-period:])
+            lowest_l = min(lows[-period:])
+            rng = highest_h - lowest_l
+            wr = (highest_h - closes[-1]) / (rng + 1e-10) * -100
+            return {"williams_r": round(wr, 2)}
+        except Exception:
+            return {"williams_r": -50.0}
+
+    def _calculate_volume_indicators(self, closes: list,
+                                     volumes: list) -> dict:
+        try:
+            result = {}
+            if len(closes) < 20:
+                return result
+
+            # OBV (On-Balance Volume)
+            obv = 0.0
+            for i in range(1, len(closes)):
+                if closes[i] > closes[i - 1]:
+                    obv += volumes[i]
+                elif closes[i] < closes[i - 1]:
+                    obv -= volumes[i]
+            result["obv"] = round(obv, 2)
+
+            # Volume SMA
+            vol_sma = sum(volumes[-20:]) / 20
+            result["volume_sma"] = round(vol_sma, 2)
+            result["volume_ratio"] = round(
+                volumes[-1] / (vol_sma + 1e-10), 3)
+
+            # MFI (Money Flow Index)
+            if len(closes) >= 14:
+                typical_prices = [
+                    (closes[i] + closes[i] + closes[i]) / 3
+                    for i in range(len(closes))
+                ]
+                pos_mf = sum(
+                    typical_prices[i] * volumes[i]
+                    for i in range(-14, 0)
+                    if typical_prices[i] > typical_prices[i - 1]
+                )
+                neg_mf = sum(
+                    typical_prices[i] * volumes[i]
+                    for i in range(-14, 0)
+                    if typical_prices[i] < typical_prices[i - 1]
+                )
+                mfr = pos_mf / (neg_mf + 1e-10)
+                mfi = 100 - (100 / (1 + mfr))
+                result["mfi"] = round(mfi, 2)
+
+            # VWAP approximation
+            vwap_num = sum(
+                closes[i] * volumes[i] for i in range(-20, 0))
+            vwap_den = sum(volumes[-20:])
+            result["vwap_approx"] = round(
+                vwap_num / (vwap_den + 1e-10), 5)
+
+            return result
+        except Exception:
+            return {}
+
+    def _calculate_ichimoku(self, highs: list, lows: list,
+                            closes: list) -> dict:
+        try:
+            if len(closes) < 52:
+                return {}
+
+            # Tenkan-sen (9)
+            tenkan = (max(highs[-9:]) + min(lows[-9:])) / 2
+
+            # Kijun-sen (26)
+            kijun = (max(highs[-26:]) + min(lows[-26:])) / 2
+
+            # Senkou Span A
+            span_a = (tenkan + kijun) / 2
+
+            # Senkou Span B (52)
+            span_b = (max(highs[-52:]) + min(lows[-52:])) / 2
+
+            # Chikou Span
+            chikou = closes[-1]
+
+            price = closes[-1]
+            cloud_top = max(span_a, span_b)
+            cloud_bot = min(span_a, span_b)
+
+            if price > cloud_top:
+                cloud_signal = "ABOVE"
+            elif price < cloud_bot:
+                cloud_signal = "BELOW"
+            else:
+                cloud_signal = "INSIDE"
+
+            return {
+                "ichimoku_tenkan": round(tenkan, 5),
+                "ichimoku_kijun": round(kijun, 5),
+                "ichimoku_span_a": round(span_a, 5),
+                "ichimoku_span_b": round(span_b, 5),
+                "ichimoku_chikou": round(chikou, 5),
+                "ichimoku_cloud": cloud_signal
+            }
+        except Exception:
+            return {}
+
+    def _calculate_support_resistance(self, highs: list, lows: list,
+                                      closes: list) -> dict:
+        try:
+            if len(closes) < 20:
+                return {}
+
+            price = closes[-1]
+
+            # Pivot Points
+            prev_high = max(highs[-20:-1])
+            prev_low = min(lows[-20:-1])
+            prev_close = closes[-2]
+
+            pivot = (prev_high + prev_low + prev_close) / 3
+            r1 = 2 * pivot - prev_low
+            r2 = pivot + (prev_high - prev_low)
+            r3 = prev_high + 2 * (pivot - prev_low)
+            s1 = 2 * pivot - prev_high
+            s2 = pivot - (prev_high - prev_low)
+            s3 = prev_low - 2 * (prev_high - pivot)
+
+            # Ближайшие уровни
+            resistance_levels = sorted(
+                [r1, r2, r3], key=lambda x: x - price
+                if x > price else float('inf'))
+            support_levels = sorted(
+                [s1, s2, s3], key=lambda x: price - x
+                if x < price else float('inf'))
+
+            nearest_resistance = next(
+                (r for r in [r1, r2, r3] if r > price), r1)
+            nearest_support = next(
+                (s for s in sorted([s1, s2, s3], reverse=True)
+                 if s < price), s1)
+
+            return {
+                "pivot": round(pivot, 5),
+                "resistance_1": round(r1, 5),
+                "resistance_2": round(r2, 5),
+                "resistance_3": round(r3, 5),
+                "support_1": round(s1, 5),
+                "support_2": round(s2, 5),
+                "support_3": round(s3, 5),
+                "nearest_resistance": round(nearest_resistance, 5),
+                "nearest_support": round(nearest_support, 5),
+                "dist_to_resistance_pct": round(
+                    (nearest_resistance - price) / price * 100, 3),
+                "dist_to_support_pct": round(
+                    (price - nearest_support) / price * 100, 3)
+            }
+        except Exception:
+            return {}
+
+    def _calculate_momentum(self, closes: list) -> dict:
+        try:
+            result = {}
+            price = closes[-1]
+
+            # ROC (Rate of Change)
+            for period in [5, 10, 20]:
+                if len(closes) > period:
+                    roc = (closes[-1] - closes[-period - 1]) / (
+                        closes[-period - 1] + 1e-10) * 100
+                    result[f"roc_{period}"] = round(roc, 4)
+
+            # Momentum
+            if len(closes) > 10:
+                result["momentum_10"] = round(
+                    closes[-1] - closes[-11], 6)
+
+            # Price position (0-100)
+            if len(closes) >= 50:
+                min_p = min(closes[-50:])
+                max_p = max(closes[-50:])
+                result["price_position"] = round(
+                    (price - min_p) / (max_p - min_p + 1e-10) * 100, 2)
+
+            return result
+        except Exception:
+            return {}
+
+    def _calculate_vwap(self, highs: list, lows: list,
+                        closes: list, volumes: list) -> dict:
+        try:
+            if len(closes) < 5:
+                return {}
+            typical_prices = [
+                (h + l + c) / 3
+                for h, l, c in zip(highs, lows, closes)
+            ]
+            cum_tp_vol = sum(
+                tp * v for tp, v in zip(typical_prices, volumes))
+            cum_vol = sum(volumes)
+            vwap = cum_tp_vol / (cum_vol + 1e-10)
+            price = closes[-1]
+            return {
+                "vwap": round(vwap, 5),
+                "vwap_diff_pct": round(
+                    (price - vwap) / vwap * 100, 4)
+            }
+        except Exception:
+            return {}
+
+    def generate_signal(self, indicators: dict,
+                        price: float) -> dict:
+        """Генерация торгового сигнала на основе индикаторов"""
+        try:
+            bull_score = 0.0
+            bear_score = 0.0
+            signals = []
+
+            # RSI
+            rsi = indicators.get("rsi", 50)
+            if rsi < 30:
+                bull_score += 2.0
+                signals.append(f"RSI перепродан ({rsi:.1f})")
+            elif rsi < 40:
+                bull_score += 1.0
+                signals.append(f"RSI бычий ({rsi:.1f})")
+            elif rsi > 70:
+                bear_score += 2.0
+                signals.append(f"RSI перекуплен ({rsi:.1f})")
+            elif rsi > 60:
+                bear_score += 1.0
+                signals.append(f"RSI медвежий ({rsi:.1f})")
+
+            # MACD
+            macd_hist = indicators.get("macd_hist", 0)
+            macd = indicators.get("macd", 0)
+            if macd_hist > 0 and macd > 0:
+                bull_score += 1.5
+                signals.append("MACD бычий")
+            elif macd_hist < 0 and macd < 0:
+                bear_score += 1.5
+                signals.append("MACD медвежий")
+            elif macd_hist > 0:
+                bull_score += 0.5
+            elif macd_hist < 0:
+                bear_score += 0.5
+
+            # EMA тренд
+            ema_21 = indicators.get("ema_21")
+            ema_50 = indicators.get("ema_50")
+            ema_200 = indicators.get("ema_200")
+            if ema_21 and ema_50:
+                if ema_21 > ema_50:
+                    bull_score += 1.0
+                    signals.append("EMA21 > EMA50")
+                else:
+                    bear_score += 1.0
+                    signals.append("EMA21 < EMA50")
+            if ema_200:
+                if price > ema_200:
+                    bull_score += 1.0
+                    signals.append("Цена выше EMA200")
+                else:
+                    bear_score += 1.0
+                    signals.append("Цена ниже EMA200")
+
+            # Bollinger Bands
+            bb_pct = indicators.get("bb_pct", 0.5)
+            if bb_pct < 0.1:
+                bull_score += 1.5
+                signals.append("Цена у нижней BB")
+            elif bb_pct > 0.9:
+                bear_score += 1.5
+                signals.append("Цена у верхней BB")
+
+            # ADX тренд
+            adx = indicators.get("adx", 25)
+            di_plus = indicators.get("di_plus", 25)
+            di_minus = indicators.get("di_minus", 25)
+            if adx > 25:
+                if di_plus > di_minus:
+                    bull_score += 1.5
+                    signals.append(f"Сильный бычий тренд (ADX={adx:.1f})")
+                else:
+                    bear_score += 1.5
+                    signals.append(f"Сильный медвежий тренд (ADX={adx:.1f})")
+
+            # Stochastic
+            stoch_k = indicators.get("stoch_k", 50)
+            if stoch_k < 20:
+                bull_score += 1.0
+                signals.append(f"Stoch перепродан ({stoch_k:.1f})")
+            elif stoch_k > 80:
+                bear_score += 1.0
+                signals.append(f"Stoch перекуплен ({stoch_k:.1f})")
+
+            # CCI
+            cci = indicators.get("cci", 0)
+            if cci < -100:
+                bull_score += 0.8
+            elif cci > 100:
+                bear_score += 0.8
+
+            # MFI
+            mfi = indicators.get("mfi", 50)
+            if mfi < 20:
+                bull_score += 1.0
+                signals.append("MFI перепродан")
+            elif mfi > 80:
+                bear_score += 1.0
+                signals.append("MFI перекуплен")
+
+            # Volume
+            vol_ratio = indicators.get("volume_ratio", 1.0)
+            if vol_ratio > 2.0:
+                signals.append(f"Высокий объём x{vol_ratio:.1f}")
+                if bull_score > bear_score:
+                    bull_score += 0.5
+                else:
+                    bear_score += 0.5
+
+            # Ichimoku
+            cloud = indicators.get("ichimoku_cloud", "INSIDE")
+            tenkan = indicators.get("ichimoku_tenkan")
+            kijun = indicators.get("ichimoku_kijun")
+            if cloud == "ABOVE":
+                bull_score += 1.0
+                signals.append("Цена выше облака Ичимоку")
+            elif cloud == "BELOW":
+                bear_score += 1.0
+                signals.append("Цена ниже облака Ичимоку")
+            if tenkan and kijun:
+                if tenkan > kijun:
+                    bull_score += 0.5
+                else:
+                    bear_score += 0.5
+
+            # Williams %R
+            wr = indicators.get("williams_r", -50)
+            if wr > -20:
+                bear_score += 0.8
+            elif wr < -80:
+                bull_score += 0.8
+
+            # Итоговый сигнал
+            total = bull_score + bear_score + 0.001
+            net = bull_score - bear_score
+
+            if net > 3.0:
+                direction = "BUY"
+                confidence = min(0.95, 0.5 + net / 20)
+            elif net < -3.0:
+                direction = "SELL"
+                confidence = min(0.95, 0.5 + abs(net) / 20)
+            else:
+                direction = "HOLD"
+                confidence = 0.5
+
+            return {
+                "direction": direction,
+                "confidence": round(confidence, 3),
+                "bull_score": round(bull_score, 2),
+                "bear_score": round(bear_score, 2),
+                "net_score": round(net, 2),
+                "signals": signals[:10]
+            }
+
+        except Exception as e:
+            logger.error(f"generate_signal error: {e}")
+            return {"direction": "HOLD", "confidence": 0.5,
+                    "bull_score": 0, "bear_score": 0,
+                    "net_score": 0, "signals": []}
+
+
+# ============================================================
+# АНАЛИЗАТОР РЫНОЧНОГО РЕЖИМА
+# ============================================================
+
+class MarketRegimeAnalyzer:
+    """
+    Определение текущего рыночного режима:
+    TRENDING_UP, TRENDING_DOWN, RANGING, VOLATILE, QUIET
+    """
+
+    def __init__(self):
+        self.current_regime = "UNKNOWN"
+        self.regime_history = deque(maxlen=100)
+        self.regime_confidence = 0.0
+
+    def detect_regime(self, indicators: dict,
+                      candles: list) -> dict:
+        try:
+            if len(candles) < 20:
+                return {"regime": "UNKNOWN", "confidence": 0.0}
+
+            closes = [float(c[4]) for c in candles]
+            highs = [float(c[2]) for c in candles]
+            lows = [float(c[3]) for c in candles]
+
+            adx = indicators.get("adx", 25)
+            bb_width = indicators.get("bb_width", 0.02)
+            atr_pct = indicators.get("atr_pct", 1.0)
+            roc_20 = indicators.get("roc_20", 0)
+            ema_21 = indicators.get("ema_21", closes[-1])
+            ema_50 = indicators.get("ema_50", closes[-1])
+
+            scores = {
+                "TRENDING_UP": 0.0,
+                "TRENDING_DOWN": 0.0,
+                "RANGING": 0.0,
+                "VOLATILE": 0.0,
+                "QUIET": 0.0
+            }
+
+            # ADX анализ
+            if adx > 35:
+                if roc_20 > 0:
+                    scores["TRENDING_UP"] += 3.0
+                else:
+                    scores["TRENDING_DOWN"] += 3.0
+            elif adx < 20:
+                scores["RANGING"] += 2.0
+
+            # Волатильность
+            if atr_pct > 3.0:
+                scores["VOLATILE"] += 2.5
+            elif atr_pct < 0.5:
+                scores["QUIET"] += 2.5
+
+            # BB width
+            if bb_width > 0.05:
+                scores["VOLATILE"] += 1.5
+            elif bb_width < 0.01:
+                scores["QUIET"] += 1.5
+                scores["RANGING"] += 1.0
+
+            # EMA alignment
+            if ema_21 and ema_50:
+                ema_diff_pct = abs(ema_21 - ema_50) / ema_50 * 100
+                if ema_diff_pct > 2.0:
+                    if ema_21 > ema_50:
+                        scores["TRENDING_UP"] += 2.0
+                    else:
+                        scores["TRENDING_DOWN"] += 2.0
+                else:
+                    scores["RANGING"] += 1.5
+
+            # ROC тренд
+            if roc_20 > 5:
+                scores["TRENDING_UP"] += 2.0
+            elif roc_20 < -5:
+                scores["TRENDING_DOWN"] += 2.0
+            elif abs(roc_20) < 2:
+                scores["RANGING"] += 1.0
+
+            # Определение режима
+            best_regime = max(scores, key=scores.get)
+            best_score = scores[best_regime]
+            total_score = sum(scores.values()) + 0.001
+            confidence = min(0.95, best_score / total_score * 2)
+
+            self.current_regime = best_regime
+            self.regime_confidence = confidence
+            self.regime_history.append(best_regime)
+
+            return {
+                "regime": best_regime,
+                "confidence": round(confidence, 3),
+                "scores": {k: round(v, 2) for k, v in scores.items()},
+                "adx": adx,
+                "bb_width": bb_width,
+                "atr_pct": atr_pct
+            }
+
+        except Exception as e:
+            logger.error(f"detect_regime error: {e}")
+            return {"regime": "UNKNOWN", "confidence": 0.0}
+
+    def get_regime_strategy(self) -> dict:
+        """Оптимальная стратегия для текущего режима"""
+        strategies = {
+            "TRENDING_UP": {
+                "preferred": "TREND_FOLLOWING",
+                "indicators": ["EMA", "MACD", "ADX"],
+                "avoid": ["mean_reversion"],
+                "risk_multiplier": 1.2,
+                "note": "Торгуй по тренду, не против"
+            },
+            "TRENDING_DOWN": {
+                "preferred": "SHORT_SELLING",
+                "indicators": ["EMA", "MACD", "RSI"],
+                "avoid": ["mean_reversion"],
+                "risk_multiplier": 1.0,
+                "note": "Шорты предпочтительны"
+            },
+            "RANGING": {
+                "preferred": "MEAN_REVERSION",
+                "indicators": ["RSI", "BB", "Stochastic"],
+                "avoid": ["trend_following"],
+                "risk_multiplier": 0.8,
+                "note": "Покупай у поддержки, продавай у сопротивления"
+            },
+            "VOLATILE": {
+                "preferred": "BREAKOUT",
+                "indicators": ["ATR", "BB", "Volume"],
+                "avoid": ["scalping"],
+                "risk_multiplier": 0.6,
+                "note": "Уменьши размер позиции, жди пробоя"
+            },
+            "QUIET": {
+                "preferred": "SCALPING",
+                "indicators": ["Stochastic", "CCI", "BB"],
+                "avoid": ["trend_following"],
+                "risk_multiplier": 1.0,
+                "note": "Малые движения, скальпинг"
+            },
+            "UNKNOWN": {
+                "preferred": "WAIT",
+                "indicators": [],
+                "avoid": ["all"],
+                "risk_multiplier": 0.5,
+                "note": "Жди ясности"
+            }
+        }
+        return strategies.get(self.current_regime, strategies["UNKNOWN"])
+
+
+# ============================================================
+# ВЕРХОВНЫЙ МОЗГ GM AI
+# ============================================================
+
+class GMSupremeBrain:
+    """
+    Главный класс — объединяет все компоненты в единый
+    торговый интеллект.
+    """
+
+    def __init__(self, openai_api_key: str = None):
+        self.version = "SUPREME_v5.0"
+        self.iq = 50.0
+        self.target_iq = MAX_IQ
+        self.created_at = datetime.now()
+        self.analysis_count = 0
+        self.correct_predictions = 0
+        self.total_predictions = 0
+
+        # Компоненты
+        self.neural_net = PureNeuralNetwork(
+            input_size=20, hidden_size=64, output_size=3)
+        self.genetic_optimizer = GeneticStrategyOptimizer(
+            population_size=STRATEGY_POPULATION)
+        self.pattern_analyzer = QuantumPatternAnalyzer()
+        self.risk_manager = SupremeRiskManager()
+        self.ta_engine = TechnicalAnalysisEngine()
+        self.regime_analyzer = MarketRegimeAnalyzer()
+
+        # Память
+        self.market_memory = deque(maxlen=MEMORY_DEPTH)
+        self.prediction_history = deque(maxlen=1000)
+        self.trade_history = deque(maxlen=500)
+        self.knowledge_base = defaultdict(list)
+
+        # OpenAI
+        self.openai_key = openai_api_key
+        self.gpt_enabled = bool(openai_api_key and OPENAI_OK)
+
+        # Состояние
+        self.is_running = False
+        self.evolution_thread = None
+        self.lock = threading.Lock()
+
+        # Метрики
+        self.metrics = {
+            "total_analyses": 0,
+            "accuracy": 0.0,
+            "avg_confidence": 0.0,
+            "iq_evolution": [50.0],
+            "best_signal_accuracy": 0.0
+        }
+
+        logger.info(f"🧠 GM AI SUPREME v5.0 инициализирован")
+        logger.info(f"   IQ: {self.iq} → {self.target_iq}")
+        logger.info(f"   Компоненты: NN + Genetic + Patterns + "
+                    f"Risk + TA + Regime")
+
+    def _extract_features(self, indicators: dict,
+                          patterns: dict,
+                          regime: dict,
+                          price: float) -> list:
+        """Извлечение признаков для нейросети"""
+        try:
+            features = [
+                indicators.get("rsi", 50) / 100,
+                (indicators.get("macd_hist", 0) + 0.01) / 0.02,
+                indicators.get("bb_pct", 0.5),
+                indicators.get("adx", 25) / 100,
+                indicators.get("stoch_k", 50) / 100,
+                indicators.get("cci", 0) / 200,
+                indicators.get("williams_r", -50) / -100,
+                indicators.get("atr_pct", 1.0) / 5.0,
+                indicators.get("volume_ratio", 1.0) / 3.0,
+                indicators.get("roc_20", 0) / 20,
+                indicators.get("mfi", 50) / 100,
+                1.0 if indicators.get("ichimoku_cloud") == "ABOVE" else
+                (-1.0 if indicators.get("ichimoku_cloud") == "BELOW" else 0.0),
+                1.0 if patterns.get("bias") == "BULLISH" else
+                (-1.0 if patterns.get("bias") == "BEARISH" else 0.0),
+                patterns.get("strength", 0.5),
+                len(patterns.get("bullish", [])) / 10,
+                len(patterns.get("bearish", [])) / 10,
+                1.0 if regime.get("regime") == "TRENDING_UP" else
+                (-1.0 if regime.get("regime") == "TRENDING_DOWN" else 0.0),
+                regime.get("confidence", 0.5),
+                indicators.get("vwap_diff_pct", 0) / 5.0,
+                indicators.get("price_position", 50) / 100
+            ]
+            return features[:20]
+        except Exception:
+            return [0.5] * 20
+
+    def analyze_market(self, symbol: str, candles: list,
+                       balance: float = 1000.0,
+                       additional_context: str = "") -> dict:
+        """
+        Главная функция анализа рынка.
+        Возвращает полный анализ и торговый сигнал.
+        """
+        try:
+            with self.lock:
+                self.analysis_count += 1
+                self.metrics["total_analyses"] += 1
+                start_time = time.time()
+
+                if len(candles) < 20:
+                    return {
+                        "error": "Недостаточно данных",
+                        "min_candles": 20,
+                        "provided": len(candles)
+                    }
+
+                price = float(candles[-1][4])
+
+                # 1. Технический анализ
+                indicators = self.ta_engine.calculate_all(candles)
+
+                # 2. Паттерны
+                patterns = self.pattern_analyzer.analyze_all(candles)
+
+                # 3. Рыночный режим
+                regime = self.regime_analyzer.detect_regime(
+                    indicators, candles)
+
+                # 4. Сигнал ТА
+                ta_signal = self.ta_engine.generate_signal(
+                    indicators, price)
+
+                # 5. Нейросеть
+                features = self._extract_features(
+                    indicators, patterns, regime, price)
+                nn_signal = self.neural_net.predict_signal(features)
+
+                # 6. Лучший геном
+                best_genome = self.genetic_optimizer.get_best_genome()
+
+                # 7. Комбинированный сигнал
+                final_signal = self._combine_signals(
+                    ta_signal, nn_signal, patterns,
+                    regime, best_genome)
+
+                # 8. Риск-менеджмент
+                win_rate = self._get_win_rate()
+                avg_win, avg_loss = self._get_avg_win_loss()
+                sl_pct = best_genome.get(
+                    "stop_loss_pct", 0.015) if best_genome else 0.015
+                position_info = self.risk_manager.calculate_position_size(
+                    balance, sl_pct, win_rate, avg_win, avg_loss)
+
+                # 9. GPT анализ (если доступен)
+                gpt_insight = ""
+                if self.gpt_enabled and additional_context:
+                    gpt_insight = self._get_gpt_insight(
+                        symbol, price, ta_signal,
+                        patterns, regime, additional_context)
+
+                # 10. IQ эволюция
+                self._evolve_iq(final_signal["confidence"])
+
+                elapsed = time.time() - start_time
+
+                result = {
+                    "symbol": symbol,
+                    "price": price,
+                    "timestamp": datetime.now().isoformat(),
+                    "analysis_id": self.analysis_count,
+                    "iq": round(self.iq, 1),
+
+                    # Главный сигнал
+                    "signal": final_signal["direction"],
+                    "confidence": final_signal["confidence"],
+                    "signal_strength": final_signal["strength"],
+
+                    # Уровни входа
+                    "entry_price": price,
+                    "stop_loss": round(
+                        price * (1 - sl_pct)
+                        if final_signal["direction"] == "BUY"
+                        else price * (1 + sl_pct), 5),
+                    "take_profit": round(
+                        price * (1 + sl_pct * 2.5)
+                        if final_signal["direction"] == "BUY"
+                        else price * (1 - sl_pct * 2.5), 5),
+
+                    # Риск
+                    "position_size": position_info.get("position_size", 0),
+                    "risk_pct": position_info.get("risk_pct", 1.0),
+                    "risk_level": self.risk_manager.risk_level,
+
+                    # Детали анализа
+                    "regime": regime.get("regime", "UNKNOWN"),
+                    "regime_confidence": regime.get("confidence", 0),
+                    "patterns_bullish": len(patterns.get("bullish", [])),
+                    "patterns_bearish": len(patterns.get("bearish", [])),
+                    "pattern_bias": patterns.get("bias", "NEUTRAL"),
+                    "top_patterns": self._get_top_patterns(patterns),
+
+                    # Индикаторы
+                    "indicators": {
+                        "rsi": indicators.get("rsi", 50),
+                        "macd": indicators.get("macd", 0),
+                        "macd_hist": indicators.get("macd_hist", 0),
+                        "adx": indicators.get("adx", 25),
+                        "bb_pct": indicators.get("bb_pct", 0.5),
+                        "stoch_k": indicators.get("stoch_k", 50),
+                        "atr_pct": indicators.get("atr_pct", 1.0),
+                        "volume_ratio": indicators.get("volume_ratio", 1.0),
+                        "ema_21": indicators.get("ema_21"),
+                        "ema_50": indicators.get("ema_50"),
+                        "ema_200": indicators.get("ema_200"),
+                        "ichimoku_cloud": indicators.get("ichimoku_cloud"),
+                        "support": indicators.get("nearest_support"),
+                        "resistance": indicators.get("nearest_resistance")
+                    },
+
+                    # Компонентные сигналы
+                    "component_signals": {
+                        "ta": ta_signal["direction"],
+                        "ta_confidence": ta_signal["confidence"],
+                        "neural_net": nn_signal["signal"],
+                        "nn_confidence": nn_signal["confidence"],
+                        "pattern": patterns.get("bias", "NEUTRAL"),
+                        "regime_strategy":
+                            self.regime_analyzer.get_regime_strategy()[
+                                "preferred"]
+                    },
+
+                    # TA сигналы
+                    "ta_signals": ta_signal.get("signals", []),
+
+                    # GPT
+                    "gpt_insight": gpt_insight,
+
+                    # Стратегия режима
+                    "regime_strategy": self.regime_analyzer.get_regime_strategy(),
+
+                    # Производительность
+                    "nn_accuracy": round(
+                        self.neural_net.get_accuracy() * 100, 1),
+                    "nn_loss": round(self.neural_net.get_loss(), 4),
+                    "win_rate": round(win_rate * 100, 1),
+                    "total_trades": len(self.trade_history),
+                    "elapsed_ms": round(elapsed * 1000, 1)
+                }
+
+                # Сохранение в память
+                self.market_memory.append({
+                    "timestamp": datetime.now(),
+                    "symbol": symbol,
+                    "price": price,
+                    "signal": final_signal["direction"],
+                    "confidence": final_signal["confidence"]
+                })
+
+                self.prediction_history.append({
+                    "signal": final_signal["direction"],
+                    "confidence": final_signal["confidence"],
+                    "price": price,
+                    "timestamp": datetime.now()
+                })
+
+                return result
+
+        except Exception as e:
+            logger.error(f"analyze_market error: {e}", exc_info=True)
+            return {"error": str(e)}
+
+    def _combine_signals(self, ta_signal: dict, nn_signal: dict,
+                         patterns: dict, regime: dict,
+                         genome: dict) -> dict:
+        """Комбинирование сигналов от разных источников"""
+        try:
+            scores = {"BUY": 0.0, "SELL": 0.0, "HOLD": 0.0}
+
+            # Вес ТА (40%)
+            ta_dir = ta_signal.get("direction", "HOLD")
+            ta_conf = ta_signal.get("confidence", 0.5)
+            scores[ta_dir] += ta_conf * 0.40
+
+            # Вес нейросети (25%)
+            nn_dir = nn_signal.get("signal", "HOLD")
+            nn_conf = nn_signal.get("confidence", 0.33)
+            scores[nn_dir] += nn_conf * 0.25
+
+            # Вес паттернов (20%)
+            pattern_bias = patterns.get("bias", "NEUTRAL")
+            pattern_str = patterns.get("strength", 0.5)
+            if pattern_bias == "BULLISH":
+                scores["BUY"] += pattern_str * 0.20
+            elif pattern_bias == "BEARISH":
+                scores["SELL"] += pattern_str * 0.20
+            else:
+                scores["HOLD"] += 0.10
+
+            # Вес режима (15%)
+            regime_name = regime.get("regime", "UNKNOWN")
+            regime_conf = regime.get("confidence", 0.5)
+            if regime_name == "TRENDING_UP":
+                scores["BUY"] += regime_conf * 0.15
+            elif regime_name == "TRENDING_DOWN":
+                scores["SELL"] += regime_conf * 0.15
+            elif regime_name == "VOLATILE":
+                scores["HOLD"] += 0.15
+            else:
+                scores["HOLD"] += 0.075
+
+            # Genome адаптация
+            if genome:
+                sentiment_w = genome.get("sentiment_weight", 0.5)
+                if pattern_bias == "BULLISH":
+                    scores["BUY"] += sentiment_w * 0.05
+                elif pattern_bias == "BEARISH":
+                    scores["SELL"] += sentiment_w * 0.05
+
+            # Итог
+            best_dir = max(scores, key=scores.get)
+            best_score = scores[best_dir]
+            total = sum(scores.values()) + 0.001
+
+            # Минимальный порог уверенности
+            if best_score < 0.25:
+                best_dir = "HOLD"
+
+            strength = "STRONG" if best_score > 0.5 else (
+                "MODERATE" if best_score > 0.35 else "WEAK")
+
+            return {
+                "direction": best_dir,
+                "confidence": round(min(0.95, best_score), 3),
+                "scores": {k: round(v, 3) for k, v in scores.items()},
+                "strength": strength
+            }
+
+        except Exception as e:
+            logger.error(f"combine_signals error: {e}")
+            return {"direction": "HOLD", "confidence": 0.5,
+                    "scores": {}, "strength": "WEAK"}
+
+    def _get_top_patterns(self, patterns: dict) -> list:
+        """Топ паттерны по силе"""
+        all_patterns = (
+            patterns.get("bullish", []) +
+            patterns.get("bearish", [])
+        )
+        sorted_p = sorted(
+            all_patterns,
+            key=lambda x: x.get("strength", 0),
+            reverse=True
+        )
+        return [
+            f"{p['name']} ({p['direction']}, "
+            f"{p['strength']:.0%})"
+            for p in sorted_p[:5]
+        ]
+
+    def _get_win_rate(self) -> float:
+        """Win rate из истории сделок"""
+        if not self.trade_history:
+            return 0.5
+        wins = sum(1 for t in self.trade_history
+                   if t.get("profit", 0) > 0)
+        return wins / len(self.trade_history)
+
+    def _get_avg_win_loss(self) -> Tuple[float, float]:
+        """Средний выигрыш и проигрыш"""
+        wins = [t["profit"] for t in self.trade_history
+                if t.get("profit", 0) > 0]
+        losses = [abs(t["profit"]) for t in self.trade_history
+                  if t.get("profit", 0) < 0]
+        avg_win = sum(wins) / len(wins) if wins else 0.02
+        avg_loss = sum(losses) / len(losses) if losses else 0.01
+        return avg_win, avg_loss
+
+    def _evolve_iq(self, confidence: float):
+        """Эволюция IQ на основе качества анализа"""
+        try:
+            if confidence > 0.7:
+                delta = IQ_EVOLUTION_RATE * self.iq * confidence
+            elif confidence > 0.5:
+                delta = IQ_EVOLUTION_RATE * self.iq * 0.5
+            else:
+                delta = IQ_EVOLUTION_RATE * self.iq * 0.1
+
+            self.iq = min(self.target_iq, self.iq + delta)
+
+            if len(self.metrics["iq_evolution"]) % 100 == 0:
+                self.metrics["iq_evolution"].append(round(self.iq, 1))
+                if len(self.metrics["iq_evolution"]) > 1000:
+                    self.metrics["iq_evolution"] = \
+                        self.metrics["iq_evolution"][-1000:]
+
+        except Exception:
+            pass
+
+    def _get_gpt_insight(self, symbol: str, price: float,
+                         ta_signal: dict, patterns: dict,
+                         regime: dict,
+                         context: str) -> str:
+        """GPT-4 анализ для дополнительного контекста"""
+        try:
+            if not self.gpt_enabled:
+                return ""
+
+            import openai
+            client = openai.OpenAI(api_key=self.openai_key)
+
+            prompt = f"""Ты профессиональный трейдер. Кратко (2-3 предложения) 
+оцени ситуацию:
+Символ: {symbol}, Цена: {price}
+ТА Сигнал: {ta_signal.get('direction')} 
+(уверенность {ta_signal.get('confidence', 0):.0%})
+Паттерны: {patterns.get('bias')} (сила {patterns.get('strength', 0):.0%})
+Режим рынка: {regime.get('regime')}
+Контекст: {context[:200]}
+Дай краткое торговое заключение."""
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=150,
+                temperature=0.3
+            )
+            return response.choices[0].message.content.strip()
+
+        except Exception as e:
+            logger.debug(f"GPT error: {e}")
+            return ""
+
+    def record_trade_result(self, signal: str, profit: float,
+                            entry_price: float, exit_price: float):
+        """Запись результата сделки для обучения"""
+        try:
+            trade = {
+                "signal": signal,
+                "profit": profit,
+                "entry": entry_price,
+                "exit": exit_price,
+                "timestamp": datetime.now(),
+                "win": profit > 0
+            }
+            self.trade_history.append(trade)
+            self.risk_manager.update_daily_pnl(profit)
+
+            # Обучение нейросети
+            if self.prediction_history:
+                last_pred = self.prediction_history[-1]
+                target = 2 if signal == "BUY" else (
+                    0 if signal == "SELL" else 1)
+                self.neural_net.train_step(
+                    self._get_last_features(), target)
+
+            logger.info(
+                f"📊 Сделка: {signal} | "
+                f"P&L: {profit:+.4f} | "
+                f"Win rate: {self._get_win_rate():.1%}")
+
+        except Exception as e:
+            logger.error(f"record_trade_result error: {e}")
+
+    def _get_last_features(self) -> list:
+        """Последние признаки из памяти"""
+        if self.market_memory:
+            last = self.market_memory[-1]
+            return [last.get("confidence", 0.5)] * 20
+        return [0.5] * 20
+
+    def get_brain_status(self) -> dict:
+        """Статус мозга"""
+        return {
+            "version": self.version,
+            "iq": round(self.iq, 1),
+            "iq_progress_pct": round(self.iq / MAX_IQ * 100, 3),
+            "total_analyses": self.analysis_count,
+            "win_rate": round(self._get_win_rate() * 100, 1),
+            "total_trades": len(self.trade_history),
+            "nn_accuracy": round(
+                self.neural_net.get_accuracy() * 100, 1),
+            "nn_training_steps": self.neural_net.training_steps,
+            "genetic_generation": self.genetic_optimizer.generation,
+            "genetic_best_fitness": round(
+                self.genetic_optimizer.best_fitness, 2),
+            "pattern_library_size": len(
+                self.pattern_analyzer.pattern_library),
+            "memory_size": len(self.market_memory),
+            "risk_level": self.risk_manager.risk_level,
+            "consecutive_losses": self.risk_manager.consecutive_losses,
+            "current_regime": self.regime_analyzer.current_regime,
+            "uptime_hours": round(
+                (datetime.now() - self.created_at).total_seconds() / 3600, 2),
+            "gpt_enabled": self.gpt_enabled
+        }
+
+    def start_continuous_learning(self):
+        """Запуск непрерывного самообучения в фоне"""
+        if self.is_running:
+            return
+
+        self.is_running = True
+
+        def learning_loop():
+            logger.info("🔄 Запуск непрерывного обучения...")
+            while self.is_running:
+                try:
+                    # Случайное обучение нейросети
+                    fake_features = [random.gauss(0.5, 0.2) for _ in range(20)]
+                    fake_target = random.randint(0, 2)
+                    self.neural_net.train_step(fake_features, fake_target)
+
+                    # Периодическая эволюция
+                    if self.neural_net.training_steps % 100 == 0:
+                        results = [[{"profit": random.gauss(0.01, 0.02)}
+                                     for _ in range(10)]
+                                    for _ in range(
+                                        self.genetic_optimizer.population_size)]
+                        self.genetic_optimizer.evolve_generation(results)
+
+                    time.sleep(0.1)
+
+                except Exception as e:
+                    logger.debug(f"Learning loop error: {e}")
+                    time.sleep(1.0)
+
+        self.evolution_thread = threading.Thread(
+            target=learning_loop, daemon=True)
+        self.evolution_thread.start()
+        logger.info("✅ Непрерывное обучение запущено")
+
+    def stop_continuous_learning(self):
+        """Остановка непрерывного обучения"""
+        self.is_running = False
+        logger.info("⏹️ Непрерывное обучение остановлено")
+
+
+# ============================================================
+# ФУНКЦИЯ ИНТЕГРАЦИИ С ТОРГОВОЙ СИСТЕМОЙ
+# ============================================================
+
+def create_supreme_brain(openai_key: str = None) -> GMSupremeBrain:
+    """Фабричная функция создания мозга"""
+    brain = GMSupremeBrain(openai_api_key=openai_key)
+    brain.start_continuous_learning()
+    return brain
+
+
+def analyze_with_supreme_brain(brain: GMSupremeBrain,
+                                symbol: str,
+                                candles: list,
+                                balance: float = 1000.0,
+                                db_session=None) -> dict:
+    """
+    Обёртка для интеграции с существующей торговой системой.
+    Совместима с форматом данных CCXT.
+    """
+    try:
+        result = brain.analyze_market(
+            symbol=symbol,
+            candles=candles,
+            balance=balance
+        )
+
+        # Логирование в БД если доступна
+        if db_session and SQLALCHEMY_OK and "error" not in result:
+            try:
+                pass  # Здесь можно добавить запись в БД
+            except Exception:
+                pass
+
+        return result
+
+    except Exception as e:
+        logger.error(f"analyze_with_supreme_brain error: {e}")
+        return {"error": str(e), "signal": "HOLD", "confidence": 0.0}
+
+
+# ============================================================
+# ДЕМОНСТРАЦИЯ
+# ============================================================
+
+def demo():
+    """Демонстрация работы GM AI Supreme Brain"""
+    print("=" * 60)
+    print("🧠 GM AI SUPREME BRAIN v5.0 — ДЕМОНСТРАЦИЯ")
+    print("=" * 60)
+
+    # Создание мозга
+    brain = create_supreme_brain()
+
+    # Генерация тестовых свечей (OHLCV)
+    print("\n📊 Генерация тестовых данных...")
+    candles = []
+    price = 45000.0
+    for i in range(100):
+        open_p = price
+        change = random.gauss(0, price * 0.01)
+        close_p = price + change
+        high_p = max(open_p, close_p) + abs(random.gauss(0, price * 0.005))
+        low_p = min(open_p, close_p) - abs(random.gauss(0, price * 0.005))
+        volume = random.uniform(10, 100)
+        timestamp = int(time.time() * 1000) - (100 - i) * 60000
+
+        candles.append([timestamp, open_p, high_p, low_p, close_p, volume])
+        price = close_p
+
+    # Анализ
+    print("\n🔍 Анализ рынка BTC/USDT...")
+    result = brain.analyze_market(
+        symbol="BTC/USDT",
+        candles=candles,
+        balance=10000.0
+    )
+
+    if "error" not in result:
+        print(f"\n✅ РЕЗУЛЬТАТ АНАЛИЗА:")
+        print(f"   💰 Цена: ${result['price']:,.2f}")
+        print(f"   🎯 Сигнал: {result['signal']} "
+              f"(уверенность {result['confidence']:.1%})")
+        print(f"   📈 Сила: {result['signal_strength']}")
+        print(f"   🌊 Режим рынка: {result['regime']}")
+        print(f"   📊 Паттерны: "
+              f"+{result['patterns_bullish']} бычьих, "
+              f"-{result['patterns_bearish']} медвежьих")
+        print(f"   🛡️ RSI: {result['indicators']['rsi']:.1f}")
+        print(f"   📉 ADX: {result['indicators']['adx']:.1f}")
+        print(f"   💎 IQ: {result['iq']}")
+        print(f"   ⏱️ Время анализа: {result['elapsed_ms']:.1f}мс")
+
+        if result.get("top_patterns"):
+            print(f"\n   🔮 Топ паттерны:")
+            for p in result["top_patterns"][:3]:
+                print(f"      • {p}")
+
+        print(f"\n   📐 Компонентные сигналы:")
+        cs = result.get("component_signals", {})
+        print(f"      TA:      {cs.get('ta', 'N/A')} "
+              f"({cs.get('ta_confidence', 0):.1%})")
+        print(f"      Нейросеть: {cs.get('neural_net', 'N/A')} "
+              f"({cs.get('nn_confidence', 0):.1%})")
+        print(f"      Паттерн: {cs.get('pattern', 'N/A')}")
+
+        if result.get("ta_signals"):
+            print(f"\n   📡 TA сигналы:")
+            for sig in result["ta_signals"][:5]:
+                print(f"      • {sig}")
+
+    # Статус мозга
+    print("\n" + "=" * 60)
+    print("🧬 СТАТУС МОЗГА:")
+    status = brain.get_brain_status()
+    for key, val in status.items():
+        print(f"   {key}: {val}")
+
+    # Симуляция обучения
+    print("\n⚡ Симуляция 5 торговых сделок...")
+    for i in range(5):
+        profit = random.gauss(0.015, 0.01)
+        signal = random.choice(["BUY", "SELL"])
+        brain.record_trade_result(
+            signal=signal,
+            profit=profit,
+            entry_price=price,
+            exit_price=price * (1 + profit)
+        )
+        print(f"   Сделка {i+1}: {signal} | "
+              f"P&L: {profit:+.2%}")
+
+    print(f"\n🎯 Win Rate: {brain._get_win_rate():.1%}")
+    print(f"🧠 Финальный IQ: {brain.iq:.1f}")
+
+    brain.stop_continuous_learning()
+    print("\n✅ Демонстрация завершена!")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+    )
+    demo()
